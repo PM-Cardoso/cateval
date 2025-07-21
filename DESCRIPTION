@@ -1,6 +1,6 @@
 Package: cateval
 Title: Validation of Conditional Average Treatment Effects
-Version: 1.1.1
+Version: 1.1.2
 Authors@R: 
     person("Pedro", "Cardoso", , "p.cardoso@exeter.ac.uk", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-1014-9058"))

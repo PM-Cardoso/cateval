@@ -21,15 +21,15 @@
 #'   \item{calibration_intercept}{A one-row data frame with the intercept of the linear regression model (`calibration_obs ~ calibration_pred`), representing the average deviation from perfect calibration when the predicted difference is zero. Includes:}
 #'     \describe{
 #'       \item{value}{Estimated intercept.}
-#'       \item{lci}{Lower 95\% confidence interval for the intercept.}
-#'       \item{uci}{Upper 95\% confidence interval for the intercept.}
+#'       \item{lci}{Lower 95% confidence interval for the intercept.}
+#'       \item{uci}{Upper 95% confidence interval for the intercept.}
 #'     }
 #'
 #'   \item{calibration_slope}{A one-row data frame with the slope of the regression model, representing how well predicted differences in treatment effect correspond to observed differences. Includes:}
 #'     \describe{
 #'       \item{value}{Estimated slope. A value near 1 indicates good calibration.}
-#'       \item{lci}{Lower 95\% confidence interval for the slope.}
-#'       \item{uci}{Upper 95\% confidence interval for the slope.}
+#'       \item{lci}{Lower 95% confidence interval for the slope.}
+#'       \item{uci}{Upper 95% confidence interval for the slope.}
 #'     }
 #' }
 #'

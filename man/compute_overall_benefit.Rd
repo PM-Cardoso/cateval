@@ -40,8 +40,8 @@ A data frame with one row per calibration group, containing:
 \describe{
 \item{mean}{Average predicted benefit in the group (discordant minus concordant).}
 \item{coef}{Estimated observed difference in outcome (regression coefficient).}
-\item{coef_low}{Lower bound of the 95\\% confidence interval.}
-\item{coef_high}{Upper bound of the 95\\% confidence interval.}
+\item{coef_low}{Lower bound of the 95\% confidence interval.}
+\item{coef_high}{Upper bound of the 95\% confidence interval.}
 \item{n_groups}{Total number of calibration groups.}
 \item{n}{Number of matched pairs in each group.}
 }
