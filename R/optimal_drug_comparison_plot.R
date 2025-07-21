@@ -122,13 +122,14 @@ optimal_drug_comparison_plot <- function(data, groups, plot = TRUE) {
       axis.title = element_blank()
     )
   
-  # Combine plots side-by-side ----
   
-  final_plot <- patchwork::wrap_plots(plot_a, plot_b, ncol = 2, nrow = 1)
-  
-  # Return final plot
   if (isTRUE(plot)) {
+    
+    # Combine plots side-by-side ----
+    final_plot <- patchwork::wrap_plots(plot_a, plot_b, ncol = 2, nrow = 1)
+    
     return(final_plot)
+    
   } else {
     return(
       list(
@@ -137,4 +138,5 @@ optimal_drug_comparison_plot <- function(data, groups, plot = TRUE) {
       )
     )
   }
+  
 }
