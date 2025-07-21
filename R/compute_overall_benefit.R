@@ -27,10 +27,12 @@
 #' }
 #'
 #' @details
-#' The function uses `MatchIt` for nearest-neighbor matching to control confounding. Concordant patients are those who received their predicted-optimal treatment, while discordant patients received a suboptimal one. Within each calibration group, observed outcomes are compared using regression.
+#' The function uses MatchIt for nearest-neighbor matching to control confounding. Concordant patients are those who received their predicted-optimal treatment, while discordant patients received a suboptimal one. Within each calibration group, observed outcomes are compared using regression.
 #'
-#' @import tidyverse
-#' @import MatchIt
+#' @importFrom dplyr mutate filter count group_by ungroup arrange
+#' @importFrom stringr str_count
+#' @importFrom tibble tibble
+#' @importFrom MatchIt matchit
 #' @export
 compute_overall_benefit <- function(data, 
                                       drug_var, 

@@ -1,9 +1,9 @@
 #' Estimate Observed vs Predicted Treatment Benefit Calibration
 #'
-#' This function evaluates how well predicted treatment benefits align with observed outcome differences. It groups patients by predicted benefit and compares outcomes between patients who received treatments concordant or discordant with the predicted optimal treatment. Concordance can be defined strictly by the top predicted treatment or flexibly within a specified tolerance of the best predicted outcome.  
-#'  
+#' This function evaluates how well predicted treatment benefits align with observed outcome differences. It groups patients by predicted benefit and compares outcomes between patients who received treatments concordant or discordant with the predicted optimal treatment. Concordance can be defined strictly by the top predicted treatment or flexibly within a specified tolerance of the best predicted outcome.
+#'
 #' To control for confounding, the function performs nearest-neighbor matching based on specified covariates before estimating observed treatment effect differences within matched pairs. The observed differences are then regressed against predicted differences to assess calibration of predicted treatment benefits.
-#' 
+#'
 #' @param data A data frame containing individual-level data including treatment assignments, outcomes, and predicted treatment benefits.
 #' @param drug_var Character. Column name indicating the treatment actually received by each patient.
 #' @param outcome_var Character. Column name for the outcome variable to assess treatment effect.
@@ -16,7 +16,7 @@
 #'
 #' @return 
 #' A named list with two elements:
-#' 
+#'
 #' \describe{
 #'   \item{calibration_intercept}{A one-row data frame with the intercept of the linear regression model (`calibration_obs ~ calibration_pred`), representing the average deviation from perfect calibration when the predicted difference is zero. Includes:}
 #'     \describe{
@@ -24,7 +24,7 @@
 #'       \item{lci}{Lower 95\% confidence interval for the intercept.}
 #'       \item{uci}{Upper 95\% confidence interval for the intercept.}
 #'     }
-#' 
+#'
 #'   \item{calibration_slope}{A one-row data frame with the slope of the regression model, representing how well predicted differences in treatment effect correspond to observed differences. Includes:}
 #'     \describe{
 #'       \item{value}{Estimated slope. A value near 1 indicates good calibration.}
@@ -34,13 +34,15 @@
 #' }
 #'
 #' Each estimate reflects model fit across matched patient pairs grouped by predicted benefit.
-#' 
-#' 
-#' @details
-#' This function uses nearest-neighbor matching (via the `MatchIt` package) on a set of covariates to create matched groups of concordant and discordant patients. Within each calibration group defined by predicted benefit, the observed difference in outcome is regressed on the predicted difference to assess calibration.
 #'
-#' @import tidyverse
-#' @import MatchIt
+#' @details
+#' This function uses nearest-neighbor matching (via the MatchIt package) on a set of covariates to create matched groups of concordant and discordant patients. Within each calibration group defined by predicted benefit, the observed difference in outcome is regressed on the predicted difference to assess calibration.
+#'
+#' @importFrom dplyr mutate filter count group_by ungroup arrange
+#' @importFrom stringr str_count
+#' @importFrom tibble tibble
+#' @importFrom MatchIt matchit
+#' @export
 #'
 #' @examples
 #' \dontrun{
@@ -56,8 +58,6 @@
 #' )
 #' print(result)
 #' }
-#'
-#' @export
 compute_overall_benefit_performance <- function(data, 
                                                   drug_var, 
                                                   outcome_var, 
