@@ -1,15 +1,24 @@
 Package: cateval
 Title: Validation of Conditional Average Treatment Effects
-Version: 1.0.0
+Version: 1.1.0
 Authors@R: 
     person("Pedro", "Cardoso", , "p.cardoso@exeter.ac.uk", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-1014-9058"))
-Description: This package provides a collection of function to validate conditional average treatment effects. The functions are designed for two way comparisons as well as multi treatment comparisons.
+Description: This package provides a collection of function to validate
+    conditional average treatment effects. The functions are designed for
+    two way comparisons as well as multi treatment comparisons.
 License: GPL (>= 3)
+Depends: 
+    tidyverse
+Imports: 
+    dplyr,
+    ggplot2,
+    MatchIt,
+    patchwork,
+    purrr,
+    scales,
+    stringr,
+    tibble
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.2.3
-Imports: 
-    MatchIt
-Depends: 
-    tidyverse

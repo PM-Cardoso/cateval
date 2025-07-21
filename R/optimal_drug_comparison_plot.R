@@ -5,9 +5,19 @@
 #' 2. The most frequent drug combinations by category (e.g., 1-drug, 2-drug).
 #'
 #' @param data A character vector where each element is a comma-separated string of drugs considered optimal for an individual.
-#' @param groups A named list where each name represents a category (e.g., "1-drug combination") and each value is a vector of drug counts (e.g., `1`, `2`, `4:5`).
+#' @param groups A named list where each name represents a category (e.g., "1-drug combination") and each value is a vector of drug counts (e.g., 1, 2, 4:5).
+#' @param plot Logical. If TRUE (default), returns a combined patchwork plot. If FALSE, returns a list of summary data frames.
 #'
-#' @return A patchwork plot combining two ggplots.
+#' @return A patchwork object combining two ggplot2 bar plots side-by-side.
+#' @export
+#'
+#' @importFrom dplyr mutate filter count group_by ungroup arrange
+#' @importFrom ggplot2 ggplot aes geom_text geom_col geom_hline coord_flip scale_y_continuous labs theme_minimal theme scale_x_continuous
+#' @importFrom stringr str_count
+#' @importFrom tibble tibble
+#' @importFrom patchwork wrap_plots
+#' @importFrom purrr map_dfr
+#' @importFrom scales percent
 #'
 #' @examples
 #' groups <- list(
@@ -17,8 +27,7 @@
 #'   "3/4/5-drug combinations" = 4:5
 #' )
 #' optimal_drug_comparison_plot(c("SGLT2,DPP4,GLP1", "GLP1", "TZD,DPP4"), groups)
-#'
-optimal_drug_comparison_plot <- function(data, groups) {
+optimal_drug_comparison_plot <- function(data, groups, plot = TRUE) {
   
   # Summarize number of drugs per individual ----
   
@@ -118,5 +127,14 @@ optimal_drug_comparison_plot <- function(data, groups) {
   final_plot <- patchwork::wrap_plots(plot_a, plot_b, ncol = 2, nrow = 1)
   
   # Return final plot
-  return(final_plot)
+  if (isTRUE(plot)) {
+    return(final_plot)
+  } else {
+    return(
+      list(
+        "overall" = summary_number,
+        "breakdown" = df2
+      )
+    )
+  }
 }

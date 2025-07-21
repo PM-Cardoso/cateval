@@ -4,15 +4,17 @@
 \alias{optimal_drug_comparison_plot}
 \title{Plotting optimal drug combinations}
 \usage{
-optimal_drug_comparison_plot(data, groups)
+optimal_drug_comparison_plot(data, groups, plot = TRUE)
 }
 \arguments{
 \item{data}{A character vector where each element is a comma-separated string of drugs considered optimal for an individual.}
 
-\item{groups}{A named list where each name represents a category (e.g., "1-drug combination") and each value is a vector of drug counts (e.g., \code{1}, \code{2}, \code{4:5}).}
+\item{groups}{A named list where each name represents a category (e.g., "1-drug combination") and each value is a vector of drug counts (e.g., 1, 2, 4:5).}
+
+\item{plot}{Logical. If TRUE (default), returns a combined patchwork plot. If FALSE, returns a list of summary data frames.}
 }
 \value{
-A patchwork plot combining two ggplots.
+A patchwork object combining two ggplot2 bar plots side-by-side.
 }
 \description{
 This function generates a side-by-side bar plot visualizing:
@@ -29,5 +31,4 @@ groups <- list(
   "3/4/5-drug combinations" = 4:5
 )
 optimal_drug_comparison_plot(c("SGLT2,DPP4,GLP1", "GLP1", "TZD,DPP4"), groups)
-
 }
