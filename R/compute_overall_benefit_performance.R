@@ -16,7 +16,6 @@
 #'
 #' @return 
 #' A named list with two elements:
-#'
 #' \describe{
 #'   \item{calibration_intercept}{A one-row data frame with the intercept of the linear regression model (`calibration_obs ~ calibration_pred`), representing the average deviation from perfect calibration when the predicted difference is zero. Includes:}
 #'     \describe{
@@ -38,10 +37,12 @@
 #' @details
 #' This function uses nearest-neighbor matching (via the MatchIt package) on a set of covariates to create matched groups of concordant and discordant patients. Within each calibration group defined by predicted benefit, the observed difference in outcome is regressed on the predicted difference to assess calibration.
 #'
-#' @importFrom dplyr mutate filter count group_by ungroup arrange
-#' @importFrom stringr str_count
-#' @importFrom tibble tibble
-#' @importFrom MatchIt matchit
+#' @importFrom dplyr mutate filter group_by ungroup distinct rowwise select rename_with across
+#' @importFrom tidyr drop_na unnest_wider
+#' @importFrom purrr map set_names
+#' @importFrom stringr str_detect str_split
+#' @importFrom MatchIt matchit get_matches
+#' @importFrom stats coef confint lm
 #' @export
 #'
 #' @examples
@@ -67,11 +68,9 @@ compute_overall_benefit_performance <- function(data,
                                                   match.exact = NULL, 
                                                   match.antiexact = NULL) {
   
-  # Load required libraries ----
-  require(tidyverse)  # For data manipulation and piping
-  require(MatchIt)    # For matching procedures
+  `%>%` <- dplyr::`%>%`
   
-  # Input validation ----
+  # Input validation
   if (!(drug_var %in% colnames(data))) stop("drug_var not found in data")
   if (!(outcome_var %in% colnames(data))) stop("outcome_var not found in data")
   if (!all(pred_cols %in% colnames(data))) stop("Some pred_cols not found in data")
@@ -80,45 +79,41 @@ compute_overall_benefit_performance <- function(data,
   if (!is.null(match.exact) && !all(match.exact %in% colnames(data))) stop("Some match.exact variables not in data")
   if (!is.null(match.antiexact) && !all(match.antiexact %in% colnames(data))) stop("Some match.antiexact variables not in data")
   
-  # Prepare data ----
+  # Rename for consistency
   pre_data <- data %>%
-    rename_with(~ "dataset_drug_var", all_of(drug_var)) %>%    # Consistent treatment variable name
-    rename_with(~ "dataset_outcome_var", all_of(outcome_var))  # Consistent outcome variable name
+    dplyr::rename_with(~ "dataset_drug_var", dplyr::all_of(drug_var)) %>%
+    dplyr::rename_with(~ "dataset_outcome_var", dplyr::all_of(outcome_var))
   
-  # Extract common prefix from predicted outcome columns ----
+  # Helper to get common prefix
   common_prefix <- function(strings) {
     min_len <- min(nchar(strings))
     prefix <- ""
     for (i in seq_len(min_len)) {
-      current_chars <- substr(strings, i, i)
-      if (length(unique(current_chars)) == 1) {
-        prefix <- paste0(prefix, current_chars[1])
-      } else {
-        break
-      }
+      chars <- substr(strings, i, i)
+      if (length(unique(chars)) == 1) {
+        prefix <- paste0(prefix, chars[1])
+      } else break
     }
-    return(prefix)
+    prefix
   }
   
-  prefix <- common_prefix(pred_cols)            # Extract common prefix
-  drug_names <- gsub(prefix, "", pred_cols)     # Extract drug names by removing prefix
+  prefix <- common_prefix(pred_cols)
+  drug_names <- gsub(prefix, "", pred_cols)
   
-  # Assign best predicted drug per patient using helper function ----
+  # Get best predicted drugs
   interim_dataset <- get_best_drugs(
     data = pre_data,
     rank = 1,
     column_names = pred_cols,
     final_var_name = prefix
   ) %>%
-    rename("function_rank1_drug_name" := paste0(prefix, "rank1_drug_name"))
+    dplyr::rename("function_rank1_drug_name" := paste0(prefix, "rank1_drug_name"))
   
-  # Define concordance labels ----
+  # Determine concordance
   if (is.null(conc_tolerance)) {
-    # Concordant if received exactly the top predicted drug
     interim_dataset <- interim_dataset %>%
-      mutate(conc_disc_label = ifelse(dataset_drug_var == function_rank1_drug_name, 1, 0))
+      dplyr::mutate(conc_disc_label = ifelse(dataset_drug_var == function_rank1_drug_name, 1, 0))
   } else {
-    # Concordant if received any drug within tolerance of best predicted outcome
     n_drugs_required <- length(pred_cols)
     tolerance_vars <- paste0("tolerance_drug_", 1:n_drugs_required)
     
@@ -128,27 +123,38 @@ compute_overall_benefit_performance <- function(data,
       column_names = pred_cols,
       final_var_name = prefix
     ) %>%
-      rename("function_tolerance_drug_name" := paste0(prefix, "within_", conc_tolerance, "_of_best_drug_name")) %>%
-      mutate(
-        conc_disc_label = ifelse(str_detect(function_tolerance_drug_name, paste0("\\b", dataset_drug_var, "\\b")), 1, 0)
+      dplyr::rename("function_tolerance_drug_name" := paste0(prefix, "within_", conc_tolerance, "_of_best_drug_name")) %>%
+      dplyr::mutate(
+        conc_disc_label = ifelse(
+          stringr::str_detect(function_tolerance_drug_name, paste0("\\b", dataset_drug_var, "\\b")),
+          1, 0
+        )
       ) %>%
-      mutate(drug_list = str_split(function_tolerance_drug_name, "\\s*[;,\\s]\\s*")) %>%
-      mutate(drug_list = map(drug_list, ~ rep(.x, length.out = n_drugs_required))) %>%
-      mutate(drug_list = map(drug_list, ~ set_names(.x, paste0("tolerance_drug_", seq_along(.x))))) %>%
-      unnest_wider(drug_list) %>%
-      mutate(across(
-        all_of(tolerance_vars),
-        ~ if_else(conc_disc_label == 0, dataset_drug_var, .x)
-      ))
+      dplyr::mutate(
+        drug_list = stringr::str_split(function_tolerance_drug_name, "\\s*[;,\\s]\\s*")
+      ) %>%
+      dplyr::mutate(
+        drug_list = purrr::map(drug_list, ~ rep(.x, length.out = n_drugs_required))
+      ) %>%
+      dplyr::mutate(
+        drug_list = purrr::map(drug_list, ~ purrr::set_names(.x, tolerance_vars))
+      ) %>%
+      tidyr::unnest_wider(drug_list) %>%
+      dplyr::mutate(
+        dplyr::across(
+          dplyr::all_of(tolerance_vars),
+          ~ dplyr::if_else(conc_disc_label == 0, dataset_drug_var, .x)
+        )
+      )
   }
   
-  # Perform matching to control confounding ----
-  interim_dataset <- interim_dataset %>% drop_na(all_of(matching_var))
+  # Drop NA in matching vars
+  interim_dataset <- interim_dataset %>% tidyr::drop_na(dplyr::all_of(matching_var))
   
-  categorical_vars <- matching_var[sapply(interim_dataset[matching_var], \(x) is.factor(x) || is.character(x))]
+  categorical_vars <- matching_var[sapply(interim_dataset[matching_var], function(x) is.factor(x) || is.character(x))]
   cont_vars <- setdiff(matching_var, c(categorical_vars, match.exact, match.antiexact))
   
-  # Dynamically build matching formula ----
+  # Build matching formula
   matching_formula <- paste("conc_disc_label ~", paste(cont_vars, collapse = " + "))
   for (v in categorical_vars) {
     if (length(unique(interim_dataset[[v]])) > 1) {
@@ -156,14 +162,12 @@ compute_overall_benefit_performance <- function(data,
     }
   }
   
-  # Antiexact matching variables ----
   match_model_antiexact_vars <- if (!is.null(conc_tolerance)) {
     unique(c(tolerance_vars, "dataset_drug_var", match.antiexact))
   } else {
     unique(c("dataset_drug_var", match.antiexact))
   }
   
-  # Run MatchIt nearest neighbor matching ----
   match_model <- MatchIt::matchit(
     formula = as.formula(matching_formula),
     data = interim_dataset,
@@ -174,45 +178,41 @@ compute_overall_benefit_performance <- function(data,
     antiexact = match_model_antiexact_vars
   )
   
-  # Extract matched pairs ----
   matched_data <- MatchIt::get_matches(match_model, data = interim_dataset)
   
-  # Calculate observed and predicted differences within matched pairs ----
   processed_data <- matched_data %>%
-    group_by(subclass) %>%
-    mutate(
-      concordant_drugclass  = dataset_drug_var[1],
-      discordant_drugclass  = dataset_drug_var[2],
-      calibration_obs       = diff(dataset_outcome_var)  # discordant - concordant outcome difference
+    dplyr::group_by(subclass) %>%
+    dplyr::mutate(
+      concordant_drugclass = dataset_drug_var[1],
+      discordant_drugclass = dataset_drug_var[2],
+      calibration_obs = diff(dataset_outcome_var)
     ) %>%
-    ungroup() %>%
-    distinct(subclass, .keep_all = TRUE) %>%
-    rowwise() %>%
-    mutate(
-      calibration_pred = get(paste0(prefix, discordant_drugclass)) - get(paste0(prefix, concordant_drugclass))  # predicted difference
+    dplyr::ungroup() %>%
+    dplyr::distinct(subclass, .keep_all = TRUE) %>%
+    dplyr::rowwise() %>%
+    dplyr::mutate(
+      calibration_pred = get(paste0(prefix, discordant_drugclass)) - get(paste0(prefix, concordant_drugclass))
     ) %>%
-    ungroup() %>%
-    select(calibration_pred, calibration_obs)
+    dplyr::ungroup() %>%
+    dplyr::select(calibration_pred, calibration_obs)
   
-  # Fit linear regression of observed differences on predicted differences ----
-  linear_model <- lm(calibration_obs ~ calibration_pred, data = processed_data)
+  linear_model <- stats::lm(calibration_obs ~ calibration_pred, data = processed_data)
   
-  # Compile results: calibration intercept and slope with confidence intervals ----
   result <- list(
     calibration_intercept = data.frame(
       row.names = "Intercept",
-      value = coef(linear_model)[1],
-      lci = confint(linear_model)[1, 1],
-      uci = confint(linear_model)[1, 2]
+      value = stats::coef(linear_model)[1],
+      lci = stats::confint(linear_model)[1, 1],
+      uci = stats::confint(linear_model)[1, 2]
     ),
     calibration_slope = data.frame(
       row.names = "Slope",
-      value = coef(linear_model)[2],
-      lci = confint(linear_model)[2, 1],
-      uci = confint(linear_model)[2, 2]
+      value = stats::coef(linear_model)[2],
+      lci = stats::confint(linear_model)[2, 1],
+      uci = stats::confint(linear_model)[2, 2]
     )
   )
   
-  # Return final results ----
   return(result)
+  
 }

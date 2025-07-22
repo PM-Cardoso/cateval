@@ -31,4 +31,5 @@ groups <- list(
   "3/4/5-drug combinations" = 4:5
 )
 optimal_drug_comparison_plot(c("SGLT2,DPP4,GLP1", "GLP1", "TZD,DPP4"), groups)
+
 }

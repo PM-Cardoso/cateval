@@ -39,7 +39,7 @@ calibration_hte(
 
 \item{match.exact}{Optional character vector. Variables for exact matching. Matching on best predicted drug automatically added.}
 
-\item{match.antiexact}{Optional character vector. Variables for anti-exact matching. drug_var automatically added.}
+\item{match.antiexact}{Optional character vector. Variables for anti-exact matching. \code{drug_var} automatically added.}
 }
 \value{
 A data frame where each row corresponds to a calibration group within each \code{cal_groups} setting.
@@ -50,11 +50,11 @@ Columns include:
 \item{coef}{Estimated average treatment effect (regression coefficient) comparing the two drugs, adjusted if covariates are specified.}
 \item{coef_low}{Lower bound of the 95\% confidence interval for the treatment effect.}
 \item{coef_high}{Upper bound of the 95\% confidence interval for the treatment effect.}
-\item{n_groups}{Number of calibration groups (i.e., the value of \code{cal_groups}) used to create this stratification.}
-\item{drug1}{Name of the first drug in the comparison (from \code{drugs[1]}).}
-\item{n_drug1}{Number of patients receiving \code{drug1} within the calibration group.}
-\item{drug2}{Name of the second drug in the comparison (from \code{drugs[2]}).}
-\item{n_drug2}{Number of patients receiving \code{drug2} within the calibration group.}
+\item{n_groups}{Number of calibration groups (i.e., the value of cal_groups) used to create this stratification.}
+\item{drug1}{Name of the first drug in the comparison (from drugs\link{1}).}
+\item{n_drug1}{Number of patients receiving drug1 within the calibration group.}
+\item{drug2}{Name of the second drug in the comparison (from drugs\link{2}).}
+\item{n_drug2}{Number of patients receiving drug2 within the calibration group.}
 }
 }
 \description{
@@ -74,7 +74,7 @@ result <- calibration_hte(
   cal_groups = 5
 )
 
-# Example with adjustment variables
+# With adjustment
 result_adj <- calibration_hte(
   data = test_data,
   drug_var = "drugclass",
@@ -85,7 +85,7 @@ result_adj <- calibration_hte(
   adjustment_var = c("age", "bmi", "sex")
 )
 
-# Example using matching and exact matching on sex
+# With matching and exact matching
 result_match <- calibration_hte(
   data = test_data,
   drug_var = "drugclass",
@@ -97,4 +97,5 @@ result_match <- calibration_hte(
   adjustment_var = c("age", "bmi", "sex"),
   match.exact = "sex"
 )
+
 }

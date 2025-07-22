@@ -36,6 +36,7 @@
 #'   \item{n_drug2}{Number of patients in the group receiving the second drug.}
 #' }
 #'
+#' 
 #' @examples
 #' \dontrun{
 #' # Example usage comparing 3 drugs with predicted outcomes
@@ -52,8 +53,9 @@
 #' head(results)
 #' }
 #'
-#' @import tidyverse
-#' @import MatchIt
+#' @import dplyr
+#' @importFrom utils combn
+#' 
 #' @export
 unified_validation <- function(data, 
                                drug_var, 
@@ -67,10 +69,10 @@ unified_validation <- function(data,
                                match.exact = NULL, 
                                match.antiexact = NULL) {
   
-  # Load required packages
-  require(tidyverse)
+  # Define pipe
+  `%>%` <- dplyr::`%>%`
   
-  # Input validation ----
+  # Input validation
   if (!(drug_var %in% colnames(data))) stop("`drug_var` not found in data.")
   if (!all(prediction_vars %in% colnames(data))) stop("Some `prediction_vars` not found in data.")
   if (!(outcome_var %in% colnames(data))) stop("`outcome_var` not found in data.")
@@ -87,38 +89,32 @@ unified_validation <- function(data,
   if (!is.numeric(cal_groups)) stop("`cal_groups` must be numeric.")
   if (!is.logical(matching)) stop("`matching` must be TRUE or FALSE.")
   
-  
-  # Prepare dataset for analysis ----
-  
+  # Prepare dataset
   calibration_data <- data %>%
-    rename(
+    dplyr::rename(
       dataset_drug_var = !!drug_var,
       dataset_outcome_var = !!outcome_var
     ) %>%
-    filter(dataset_drug_var %in% drugs)
+    dplyr::filter(dataset_drug_var %in% drugs)
   
-  # Map drug names to prediction column names
-  prediction_map <- setNames(prediction_vars, drugs)
+  # Map prediction variables
+  prediction_map <- stats::setNames(prediction_vars, drugs)
   output_table <- NULL
   
-  
-  # Iterate over all unique drug pairs ----
-  
-  drug_combinations <- combn(drugs, 2, simplify = FALSE)
+  # Loop over unique drug pairs
+  drug_combinations <- utils::combn(drugs, 2, simplify = FALSE)
   
   for (pair in drug_combinations) {
     
-    # Subset data to only the current drug pair
     pair_data <- calibration_data %>%
-      filter(dataset_drug_var %in% pair) %>%
-      mutate(
+      dplyr::filter(dataset_drug_var %in% pair) %>%
+      dplyr::mutate(
         dataset_drug_var = factor(dataset_drug_var, levels = rev(pair)),
         drug_1_pred = .[[prediction_map[[pair[1]]]]],
         drug_2_pred = .[[prediction_map[[pair[2]]]]],
         benefit = drug_1_pred - drug_2_pred
       )
     
-    # Run heterogenous effect calibration on the pair data
     calibration_result <- calibration_hte(
       data = pair_data,
       drug_var = "dataset_drug_var",
@@ -133,7 +129,6 @@ unified_validation <- function(data,
       match.antiexact = match.antiexact
     )
     
-    # Append results for this pair
     output_table <- dplyr::bind_rows(output_table, calibration_result)
   }
   

@@ -36,7 +36,6 @@ compute_overall_benefit_performance(
 }
 \value{
 A named list with two elements:
-
 \describe{
 \item{calibration_intercept}{A one-row data frame with the intercept of the linear regression model (\code{calibration_obs ~ calibration_pred}), representing the average deviation from perfect calibration when the predicted difference is zero. Includes:}
 \describe{
