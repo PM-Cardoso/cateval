@@ -15,6 +15,7 @@
 #' @param matching_var Character vector. Covariate names used for Mahalanobis distance matching.
 #' @param match.exact Optional character vector. Variables required to match exactly across groups. The best predicted treatment is always included.
 #' @param match.antiexact Optional character vector. Variables for anti-exact matching. The actual treatment variable is always included.
+#' @param extract.match.cohort Optional logical. If TRUE, returns matched population used for calculating overall benefits.
 #'
 #' @return A data frame with one row per calibration group, containing:
 #' \describe{
@@ -44,7 +45,8 @@ compute_overall_benefit <- function(data,
                                     conc_tolerance = NULL,
                                     matching_var = NULL, 
                                     match.exact = NULL, 
-                                    match.antiexact = NULL) {
+                                    match.antiexact = NULL,
+                                    extract.match.cohort = FALSE) {
   
   `%>%` <- dplyr::`%>%`
   
@@ -57,6 +59,7 @@ compute_overall_benefit <- function(data,
   if (!is.null(match.exact) && !all(match.exact %in% colnames(data))) stop("Some match.exact variables not in data")
   if (!is.null(match.antiexact) && !all(match.antiexact %in% colnames(data))) stop("Some match.antiexact variables not in data")
   if (!is.numeric(cal_groups)) stop("cal_groups must be numeric")
+  if (!is.logical(extract.match.cohort)) stop("extract.match.cohort must be logical")
   
   # Rename input vars
   pre_data <- data %>%
@@ -166,8 +169,8 @@ compute_overall_benefit <- function(data,
       calibration_pred = get(paste0(prefix, discordant_drugclass)) - get(paste0(prefix, concordant_drugclass))
     ) %>%
     dplyr::ungroup() %>%
-    dplyr::select(calibration_pred, calibration_obs) %>%
-    dplyr::mutate(grouping = dplyr::ntile(calibration_pred, cal_groups))
+    dplyr::mutate(grouping = dplyr::ntile(calibration_pred, cal_groups)) %>%
+    dplyr::select(calibration_pred, calibration_obs, grouping)
   
   # Initialize results
   coef      <- rep(NA_real_, cal_groups)

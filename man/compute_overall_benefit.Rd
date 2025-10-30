@@ -13,7 +13,8 @@ compute_overall_benefit(
   conc_tolerance = NULL,
   matching_var = NULL,
   match.exact = NULL,
-  match.antiexact = NULL
+  match.antiexact = NULL,
+  extract.match.cohort = FALSE
 )
 }
 \arguments{
@@ -34,6 +35,8 @@ compute_overall_benefit(
 \item{match.exact}{Optional character vector. Variables required to match exactly across groups. The best predicted treatment is always included.}
 
 \item{match.antiexact}{Optional character vector. Variables for anti-exact matching. The actual treatment variable is always included.}
+
+\item{extract.match.cohort}{Optional logical. If TRUE, returns matched population used for calculating overall benefits.}
 }
 \value{
 A data frame with one row per calibration group, containing:

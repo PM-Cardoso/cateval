@@ -16,9 +16,7 @@
 #' @param match.exact Optional character vector. Variables for exact matching. Matching on best predicted drug automatically added.
 #' @param match.antiexact Optional character vector. Variables for anti-exact matching. `drug_var` automatically added.
 #'
-#' @return 
-#' A data frame where each row corresponds to a calibration group within each `cal_groups` setting. 
-#' Columns include:
+#' @return A data frame where each row corresponds to a calibration group within each `cal_groups` setting. Columns include:
 #' 
 #' \describe{
 #'   \item{mean}{The mean predicted benefit score for patients in the calibration group.}
@@ -26,9 +24,9 @@
 #'   \item{coef_low}{Lower bound of the 95% confidence interval for the treatment effect.}
 #'   \item{coef_high}{Upper bound of the 95% confidence interval for the treatment effect.}
 #'   \item{n_groups}{Number of calibration groups (i.e., the value of cal_groups) used to create this stratification.}
-#'   \item{drug1}{Name of the first drug in the comparison (from drugs[1]).}
+#'   \item{drug1}{Name of the first drug in the comparison (from `drugs[1]`).}
 #'   \item{n_drug1}{Number of patients receiving drug1 within the calibration group.}
-#'   \item{drug2}{Name of the second drug in the comparison (from drugs[2]).}
+#'   \item{drug2}{Name of the second drug in the comparison (from `drugs[2]`).}
 #'   \item{n_drug2}{Number of patients receiving drug2 within the calibration group.}
 #' }
 #' 
