@@ -169,7 +169,21 @@ compute_overall_benefit <- function(data,
       calibration_pred = get(paste0(prefix, discordant_drugclass)) - get(paste0(prefix, concordant_drugclass))
     ) %>%
     dplyr::ungroup() %>%
-    dplyr::mutate(grouping = dplyr::ntile(calibration_pred, cal_groups)) %>%
+    dplyr::mutate(grouping = dplyr::ntile(calibration_pred, cal_groups)) 
+  
+  # Return matched cohort with groups
+  if (isTRUE(extract.match.cohort)) {
+    return(
+      matched_data %>%
+        left_join(
+          processed_data %>%
+            select(subclass, grouping), by = "subclass"
+        ) %>%
+        select(-id, -weights)
+    )
+  }
+  
+  processed_data <- processed_data %>%
     dplyr::select(calibration_pred, calibration_obs, grouping)
   
   # Initialize results
