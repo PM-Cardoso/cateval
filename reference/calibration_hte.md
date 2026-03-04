@@ -130,6 +130,7 @@ repeat the process for each value and return a combined result.
 ## Examples
 
 ``` r
+if (FALSE) { # \dontrun{
 # Basic usage without matching or adjustment
 result <- calibration_hte(
   data = test_data,
@@ -139,7 +140,6 @@ result <- calibration_hte(
   outcome_var = "posthba1cfinal",
   cal_groups = 5
 )
-#> Error: object 'test_data' not found
 
 # With adjustment
 result_adj <- calibration_hte(
@@ -151,7 +151,6 @@ result_adj <- calibration_hte(
   cal_groups = 3,
   adjustment_var = c("age", "bmi", "sex")
 )
-#> Error: object 'test_data' not found
 
 # With matching and exact matching
 result_match <- calibration_hte(
@@ -165,5 +164,5 @@ result_match <- calibration_hte(
   adjustment_var = c("age", "bmi", "sex"),
   match.exact = "sex"
 )
-#> Error: object 'test_data' not found
+} # }
 ```
