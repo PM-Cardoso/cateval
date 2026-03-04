@@ -2,6 +2,10 @@
 
 R package for validating Conditional Average Treatment Effects
 
+### Documentation website
+
+-   Package website: <https://PM-Cardoso.github.io/cateval/>
+
 
 ### Installation
 
