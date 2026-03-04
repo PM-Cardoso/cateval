@@ -1,6 +1,6 @@
 # Package index
 
-## Package functions
+## All functions
 
 - [`calibration_hte()`](https://PM-Cardoso.github.io/cateval/reference/calibration_hte.md)
   : Estimate Heterogeneous Treatment Effects Across Calibration Groups
