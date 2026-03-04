@@ -39,4 +39,5 @@ preds <- data.frame(pred_A = c(0.1, 0.3), pred_B = c(0.2, 0.2), pred_C = c(0.3, 
 get_best_drugs(preds, rank = 1, column_names = names(preds), final_var_name = "best")
 get_best_drugs(preds, tolerance = 0.05, column_names = names(preds), final_var_name = "tolerant")
 }
+
 }
