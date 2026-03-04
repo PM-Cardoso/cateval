@@ -2,3 +2,7 @@ url: https://PM-Cardoso.github.io/cateval/
 
 template:
   bootstrap: 5
+
+navbar:
+  structure:
+    left: [home, reference]
