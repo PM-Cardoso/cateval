@@ -3,15 +3,21 @@ name: pkgdown
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  read-all
 
 jobs:
   pkgdown:
     runs-on: ubuntu-latest
-    concurrency: pkgdown
+    concurrency:
+      group: pkgdown-${{ github.event_name != 'pull_request' || github.run_id }}
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
@@ -27,10 +33,14 @@ jobs:
           extra-packages: any::pkgdown, local::.
           needs: website
 
-      - name: Build pkgdown site
-        run: Rscript -e 'pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)'
+      - name: Build site
+        run: pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)
+        shell: Rscript {0}
 
-      - uses: r-lib/actions/deploy@v2
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - name: Deploy to GitHub pages 🚀
+        if: github.event_name != 'pull_request'
+        uses: JamesIves/github-pages-deploy-action@v4.5.0
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          clean: false
+          branch: gh-pages
+          folder: docs
