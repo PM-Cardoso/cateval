@@ -2,18 +2,3 @@ url: https://PM-Cardoso.github.io/cateval/
 
 template:
   bootstrap: 5
-
-home:
-  title: cateval
-  description: Validation of Conditional Average Treatment Effects
-
-reference:
-  - title: Package functions
-    contents:
-      - calibration_hte
-      - compute_overall_benefit
-      - compute_overall_benefit_performance
-      - get_best_drugs
-      - get_ranked_or_tolerant_drugs
-      - optimal_drug_comparison_plot
-      - unified_validation
