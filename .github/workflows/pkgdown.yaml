@@ -27,7 +27,8 @@ jobs:
           extra-packages: any::pkgdown, local::.
           needs: website
 
-      - uses: r-lib/actions/pkgdown@v2
+      - name: Build pkgdown site
+        run: Rscript -e 'pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)'
 
       - uses: r-lib/actions/deploy@v2
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
