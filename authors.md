@@ -11,13 +11,13 @@ Source:
 [`DESCRIPTION`](https://github.com/PM-Cardoso/cateval/blob/main/DESCRIPTION)
 
 Cardoso P (2026). *cateval: Validation of Conditional Average Treatment
-Effects*. R package version 1.3.1,
+Effects*. R package version 1.4.0,
 <https://PM-Cardoso.github.io/cateval/>.
 
     @Manual{,
       title = {cateval: Validation of Conditional Average Treatment Effects},
       author = {Pedro Cardoso},
       year = {2026},
-      note = {R package version 1.3.1},
+      note = {R package version 1.4.0},
       url = {https://PM-Cardoso.github.io/cateval/},
     }
