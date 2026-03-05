@@ -63,6 +63,7 @@ Estimates heterogeneous treatment effects between two drugs by stratifying patie
 If multiple values are provided to \code{cal_groups}, the function will repeat the process for each value and return a combined result.
 }
 \examples{
+\dontrun{
 # Basic usage without matching or adjustment
 result <- calibration_hte(
   data = test_data,
@@ -96,5 +97,6 @@ result_match <- calibration_hte(
   adjustment_var = c("age", "bmi", "sex"),
   match.exact = "sex"
 )
+}
 
 }

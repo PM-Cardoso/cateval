@@ -20,6 +20,7 @@
 #' get_best_drugs(preds, rank = 1, column_names = names(preds), final_var_name = "best")
 #' get_best_drugs(preds, tolerance = 0.05, column_names = names(preds), final_var_name = "tolerant")
 #' }
+#' 
 #' @export
 # Main wrapper function to apply drug selection logic row-wise
 get_best_drugs <- function(data, rank = 1, column_names = NULL, final_var_name = "", tolerance = NULL) {

@@ -59,6 +59,8 @@
 #' )
 #' print(result)
 #' }
+#'
+#' @export
 compute_overall_benefit_performance <- function(data, 
                                                   drug_var, 
                                                   outcome_var, 

@@ -1,39 +1,39 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>/404.html</loc>
+    <loc>https://PM-Cardoso.github.io/cateval/404.html</loc>
   </url>
   <url>
-    <loc>/authors.html</loc>
+    <loc>https://PM-Cardoso.github.io/cateval/authors.html</loc>
   </url>
   <url>
-    <loc>/index.html</loc>
+    <loc>https://PM-Cardoso.github.io/cateval/index.html</loc>
   </url>
   <url>
-    <loc>/LICENSE.html</loc>
+    <loc>https://PM-Cardoso.github.io/cateval/LICENSE.html</loc>
   </url>
   <url>
-    <loc>/reference/calibration_hte.html</loc>
+    <loc>https://PM-Cardoso.github.io/cateval/reference/calibration_hte.html</loc>
   </url>
   <url>
-    <loc>/reference/compute_overall_benefit.html</loc>
+    <loc>https://PM-Cardoso.github.io/cateval/reference/compute_overall_benefit.html</loc>
   </url>
   <url>
-    <loc>/reference/compute_overall_benefit_performance.html</loc>
+    <loc>https://PM-Cardoso.github.io/cateval/reference/compute_overall_benefit_performance.html</loc>
   </url>
   <url>
-    <loc>/reference/get_best_drugs.html</loc>
+    <loc>https://PM-Cardoso.github.io/cateval/reference/get_best_drugs.html</loc>
   </url>
   <url>
-    <loc>/reference/get_ranked_or_tolerant_drugs.html</loc>
+    <loc>https://PM-Cardoso.github.io/cateval/reference/get_ranked_or_tolerant_drugs.html</loc>
   </url>
   <url>
-    <loc>/reference/index.html</loc>
+    <loc>https://PM-Cardoso.github.io/cateval/reference/index.html</loc>
   </url>
   <url>
-    <loc>/reference/optimal_drug_comparison_plot.html</loc>
+    <loc>https://PM-Cardoso.github.io/cateval/reference/optimal_drug_comparison_plot.html</loc>
   </url>
   <url>
-    <loc>/reference/unified_validation.html</loc>
+    <loc>https://PM-Cardoso.github.io/cateval/reference/unified_validation.html</loc>
   </url>
 </urlset>

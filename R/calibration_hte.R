@@ -35,6 +35,7 @@
 #' @importFrom MatchIt matchit get_matches
 #'
 #' @examples
+#' \dontrun{
 #' # Basic usage without matching or adjustment
 #' result <- calibration_hte(
 #'   data = test_data,
@@ -68,6 +69,7 @@
 #'   adjustment_var = c("age", "bmi", "sex"),
 #'   match.exact = "sex"
 #' )
+#' }
 #'
 #' @export
 calibration_hte <- function(data,
