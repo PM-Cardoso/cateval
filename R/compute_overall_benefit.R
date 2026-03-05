@@ -147,7 +147,7 @@ compute_overall_benefit <- function(data,
     data = interim_dataset,
     method = "nearest",
     distance = "mahalanobis",
-    replace = FALSE,
+    replace = TRUE,
     exact = unique(c("function_rank1_drug_name", match.exact)),
     antiexact = match_model_antiexact_vars
   )

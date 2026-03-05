@@ -140,7 +140,7 @@ calibration_hte <- function(data,
         data = initial_dataset,
         method = "nearest",
         distance = "mahalanobis",
-        replace = FALSE,
+        replace = TRUE,
         exact = match.exact,
         antiexact = match.antiexact
       )
