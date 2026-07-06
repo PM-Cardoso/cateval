@@ -16,15 +16,26 @@ The package is designed for both **pairwise comparisons** (two treatments) and *
 
 ## Key Features
 
-### Core Functionality
+### Overall-benefit calibration
 
-- **`calibration_hte()`** — Assess calibration of heterogeneous treatment effect predictions
-- **`compute_overall_benefit()`** — Calculate aggregate treatment benefit across populations
-- **`compute_overall_benefit_performance()`** — Evaluate performance metrics of benefit estimates
-- **`get_best_drugs()`** — Identify optimal treatments based on predicted outcomes
-- **`get_ranked_or_tolerant_drugs()`** — Rank or select treatments meeting tolerance thresholds
-- **`optimal_drug_comparison_plot()`** — Visualize treatment comparisons and performance
-- **`unified_validation()`** — Comprehensive validation framework for treatment effect models
+- **`match_benefit_pairs()`** — Match concordant patients (received the recommended drug) to discordant patients, in both directions, returning the concordant, discordant and combined matched populations for inspection
+- **`benefit_deciles()`** — Mean observed benefit by group of predicted benefit (the calibration-plot data)
+- **`benefit_by_drug()`** — The same, split by recommended drug class
+- **`benefit_overall()`** — Mean observed benefit of following the model
+- **`benefit_calibration()`** — Calibration-in-the-large and calibration slope of predicted benefit
+
+Each summary reports analytical confidence intervals by default, or optional pair-level bootstrap intervals. Plotting is left to the user (see the worked example) so the calibration plot can be built with whatever detail the analysis calls for — this package only produces the underlying group and pair-level numbers.
+
+### Pairwise drug-class calibration
+
+- **`unified_validation()`** — Predicted vs observed treatment effects across all drug pairs
+- **`calibration_hte()`** — The underlying single-pair calibration engine
+
+### Predicted-best drug utilities
+
+- **`get_best_drugs()`** — Identify the recommended drug (or the near-best set) for each patient
+- **`get_ranked_or_tolerant_drugs()`** — Rank or select treatments meeting a tolerance threshold
+- **`optimal_drug_comparison_plot()`** — Visualise the distribution of recommended drug combinations
 
 ### Built-in Support for
 
@@ -53,18 +64,59 @@ devtools::install_github("PM-Cardoso/cateval", dependencies = TRUE, build_vignet
 ```r
 library(cateval)
 
-# Validate heterogeneous treatment effects calibration
-calibration_results <- calibration_hte(data = your_data, 
-                                        treatment = treatment_col,
-                                        outcome = outcome_col)
+drugs <- c("SGLT2", "GLP1", "DPP4", "SU", "TZD")
 
-# Identify optimal treatments for your population
-best_drugs <- get_best_drugs(predictions = your_predictions,
-                              treatment_names = treatment_names)
+# Pairwise heterogeneous treatment effect calibration across all drug pairs
+pairwise_results <- unified_validation(
+  data            = your_data,
+  drug_var        = "drugclass",
+  drugs           = drugs,
+  prediction_vars = paste0("pred.", drugs),
+  outcome_var     = "posthba1cfinal",
+  cal_groups      = c(3, 5, 10),
+  adjustment_var  = c("agetx", "sex", "prehba1c")
+)
 
-# Generate comparison visualizations
-optimal_drug_comparison_plot(data = comparison_data,
-                             treatment = treatment_col)
+# Overall (concordant vs discordant) benefit calibration
+# 1. match, keeping the matched populations for inspection
+matched <- match_benefit_pairs(
+  data         = your_data,
+  drug_var     = "drugclass",
+  outcome_var  = "posthba1cfinal",
+  pred_cols    = paste0("pred.", drugs),
+  matching_var = c("agetx", "sex", "prehba1c"),
+  match.exact  = "sex",
+  caliper      = c(prehba1c = 0.4),
+  seed         = 19840503
+)
+
+# 2. summarise (set bootstrap = TRUE for pair-level bootstrap intervals)
+deciles <- benefit_deciles(matched$combined, cal_groups = 10)
+overall <- benefit_overall(matched$combined)
+slope   <- benefit_calibration(matched$combined)
+
+# 3. plot the calibration yourself: group means + identity line + a LOESS
+# curve fitted on the group (decile) point estimates
+library(ggplot2)
+ggplot(deciles, aes(x = pred.benefit, y = obs.benefit)) +
+  geom_abline(intercept = 0, slope = 1, colour = "red", linetype = "dashed") +
+  geom_smooth(method = "loess", se = TRUE, span = 1, colour = "blue") +
+  geom_errorbar(aes(ymin = lower.ci, ymax = upper.ci), width = 0.2) +
+  geom_point(size = 2.5)
+
+# Identify the predicted-optimal treatment(s) for each patient
+best_drugs <- get_best_drugs(
+  data         = your_data,
+  rank         = 1,
+  column_names = paste0("pred.", drugs),
+  final_var_name = "pred."
+)
+
+# Visualise the distribution of predicted-optimal drug combinations
+optimal_drug_comparison_plot(
+  data   = best_drugs$pred.within_3_of_best_drug_name,
+  groups = list("1-drug" = 1, "2-drug" = 2, "3+-drug" = 3:5)
+)
 ```
 
 ## Citation

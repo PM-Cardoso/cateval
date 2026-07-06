@@ -1,16 +1,22 @@
 Package: cateval
 Title: Validation of Conditional Average Treatment Effects
-Version: 1.4.0
+Version: 1.5.0
 Authors@R: 
     person("Pedro", "Cardoso", , "p.cardoso@exeter.ac.uk", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-1014-9058"))
-Description: This package provides a collection of function to validate
-    conditional average treatment effects. The functions are designed for
-    two way comparisons as well as multi treatment comparisons.
+Description: Tools for validating the calibration of predicted treatment
+    benefit from treatment-selection models with a continuous outcome. The
+    package covers the two calibration analyses used in the validation
+    procedure: overall benefit, based on matched concordant and discordant
+    patients, and pairwise drug-class effects. Benefit is summarised by group
+    (calibration plot), by the mean benefit of following the model, and by the
+    calibration-in-the-large and calibration slope, each with analytical or
+    optional pair-level bootstrap confidence intervals.
 License: GPL (>= 3)
 URL: https://PM-Cardoso.github.io/cateval/, https://github.com/PM-Cardoso/cateval
 BugReports: https://github.com/PM-Cardoso/cateval/issues
-Imports: 
+Imports:
+    boot,
     dplyr,
     ggplot2,
     MatchIt,

@@ -6,3 +6,29 @@ template:
 navbar:
   structure:
     left: [home, reference]
+
+reference:
+- title: Overall-benefit calibration
+  desc: >
+    Match concordant and discordant patients, then summarise how well the
+    predicted benefit of following the model matches the observed benefit.
+  contents:
+  - match_benefit_pairs
+  - benefit_deciles
+  - benefit_by_drug
+  - benefit_overall
+  - benefit_calibration
+- title: Pairwise drug-class calibration
+  desc: >
+    Compare predicted and observed treatment effects between pairs of drugs.
+  contents:
+  - unified_validation
+  - calibration_hte
+- title: Predicted-best drug utilities
+  desc: >
+    Identify the recommended drug (or the set of near-best drugs) for each
+    patient and visualise the resulting recommendations.
+  contents:
+  - get_best_drugs
+  - get_ranked_or_tolerant_drugs
+  - optimal_drug_comparison_plot
