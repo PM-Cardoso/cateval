@@ -42,7 +42,7 @@
 #' mean observed benefit for the *same* group of patients rather than shifting
 #' the boundaries between replicates.
 #'
-#' @seealso \code{\link{match_benefit_pairs}}, \code{\link{plot_benefit_calibration}}
+#' @seealso \code{\link{match_benefit_pairs}}, \code{\link{benefit_by_drug}}
 #'
 #' @examples
 #' \dontrun{

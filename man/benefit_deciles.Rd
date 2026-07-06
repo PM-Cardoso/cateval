@@ -71,5 +71,5 @@ benefit_deciles(matched$combined, cal_groups = 10, bootstrap = TRUE, boot_seed =
 
 }
 \seealso{
-\code{\link{match_benefit_pairs}}, \code{\link{plot_benefit_calibration}}
+\code{\link{match_benefit_pairs}}, \code{\link{benefit_by_drug}}
 }

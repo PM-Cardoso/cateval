@@ -32,3 +32,6 @@ Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.3
 Config/Needs/website: r-lib/pkgdown
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3

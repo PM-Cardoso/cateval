@@ -36,7 +36,13 @@ This function identifies the drug(s) with the best (lowest) predicted outcome fr
 \examples{
 \dontrun{
 row <- c(pred_A = 0.2, pred_B = 0.5, pred_C = 0.21)
-get_ranked_or_tolerant_drugs(row, rank = 1, column_names = names(row), prediction_column = "pred_")
-get_ranked_or_tolerant_drugs(row, tolerance = 0.05, column_names = names(row), prediction_column = "pred_")
+get_ranked_or_tolerant_drugs(
+  row,
+  rank = 1, column_names = names(row), prediction_column = "pred_"
+)
+get_ranked_or_tolerant_drugs(
+  row,
+  tolerance = 0.05, column_names = names(row), prediction_column = "pred_"
+)
 }
 }

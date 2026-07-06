@@ -17,6 +17,7 @@
 #' @importFrom patchwork wrap_plots
 #' @importFrom purrr map_dfr
 #' @importFrom scales percent
+#' @importFrom stats reorder
 #' @importFrom tidyr drop_na
 #'
 #' @examples
