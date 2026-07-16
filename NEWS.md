@@ -1,3 +1,17 @@
+# cateval 1.6.0
+
+## `benefit_by_drug()` supports multiple calibration groupings
+
+* `benefit_by_drug()` now accepts a vector of `cal_groups` values (e.g.
+  `c(3, 5, 10)`) as well as a single value. Each requested number of groups is
+  computed for every drug class and the results are stacked into one data frame.
+* The output gains an `n_groups` column recording which `cal_groups` setting
+  produced each row, matching the convention already used by
+  `calibration_hte()` and `unified_validation()`. The identifying columns
+  (`index_drug`, `n_groups`) now lead the returned data frame.
+* Existing single-value calls are unchanged apart from the added `n_groups`
+  column.
+
 # cateval 1.5.0
 
 ## Overall-benefit calibration reworked

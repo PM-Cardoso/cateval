@@ -27,8 +27,10 @@ are dropped with a warning; the returned \code{index_drug} column is a
 factor whose levels follow \code{drugs}. If \code{NULL} (default), the drug
 classes present in \code{pairs} are used.}
 
-\item{cal_groups}{Integer. Number of groups per drug class (e.g. 10). Passed to
-\code{\link{benefit_deciles}}.}
+\item{cal_groups}{Numeric scalar or vector. Number(s) of groups per drug class
+(e.g. \code{10}, or \code{c(3, 5, 10)}). Each value is passed in turn to
+\code{\link{benefit_deciles}} and the results are stacked, with an
+\code{n_groups} column recording which setting produced each row.}
 
 \item{bootstrap}{Logical. Use pair-level bootstrap confidence intervals.}
 
@@ -40,8 +42,10 @@ classes present in \code{pairs} are used.}
 }
 \value{
 A data frame stacking the \code{\link{benefit_deciles}} output for each
-drug class, with an added \code{index_drug} column identifying the drug
-class that anchors each group. Suitable for faceting.
+drug class and each requested \code{cal_groups} value, with an
+\code{index_drug} column identifying the drug class that anchors each group
+and an \code{n_groups} column giving the number of calibration groups used.
+Suitable for faceting.
 }
 \description{
 Runs \code{\link{benefit_deciles}} separately within each drug class, where a
@@ -52,6 +56,7 @@ calibrated within the group of pairs anchored on each drug class.
 \examples{
 \dontrun{
 benefit_by_drug(matched$combined, cal_groups = 10)
+benefit_by_drug(matched$combined, cal_groups = c(3, 5, 10))
 }
 
 }

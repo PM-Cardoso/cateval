@@ -15,25 +15,30 @@
 #'   are dropped with a warning; the returned \code{index_drug} column is a
 #'   factor whose levels follow \code{drugs}. If \code{NULL} (default), the drug
 #'   classes present in \code{pairs} are used.
-#' @param cal_groups Integer. Number of groups per drug class (e.g. 10). Passed to
-#'   \code{\link{benefit_deciles}}.
+#' @param cal_groups Numeric scalar or vector. Number(s) of groups per drug class
+#'   (e.g. \code{10}, or \code{c(3, 5, 10)}). Each value is passed in turn to
+#'   \code{\link{benefit_deciles}} and the results are stacked, with an
+#'   \code{n_groups} column recording which setting produced each row.
 #' @param bootstrap Logical. Use pair-level bootstrap confidence intervals.
 #' @param n_boot Integer. Number of bootstrap replicates.
 #' @param boot_seed Optional integer. Seed for reproducibility.
 #' @param conf Numeric. Confidence level (default 0.95).
 #'
 #' @return A data frame stacking the \code{\link{benefit_deciles}} output for each
-#'   drug class, with an added \code{index_drug} column identifying the drug
-#'   class that anchors each group. Suitable for faceting.
+#'   drug class and each requested \code{cal_groups} value, with an
+#'   \code{index_drug} column identifying the drug class that anchors each group
+#'   and an \code{n_groups} column giving the number of calibration groups used.
+#'   Suitable for faceting.
 #'
 #' @seealso \code{\link{benefit_deciles}}, \code{\link{match_benefit_pairs}}
 #'
 #' @examples
 #' \dontrun{
 #' benefit_by_drug(matched$combined, cal_groups = 10)
+#' benefit_by_drug(matched$combined, cal_groups = c(3, 5, 10))
 #' }
 #'
-#' @importFrom dplyr filter bind_rows
+#' @importFrom dplyr filter bind_rows select
 #' @export
 benefit_by_drug <- function(pairs,
                             drugs = NULL,
@@ -48,6 +53,9 @@ benefit_by_drug <- function(pairs,
   # ---- Input validation ----
   if (!("index_drug" %in% colnames(pairs))) {
     stop("`pairs` must contain `index_drug` (use match_benefit_pairs()).")
+  }
+  if (!is.numeric(cal_groups) || length(cal_groups) < 1 || any(cal_groups < 1)) {
+    stop("`cal_groups` must be one or more positive numbers.")
   }
 
   # Use the supplied full drug list where given, so the set and ordering of drug
@@ -69,26 +77,35 @@ benefit_by_drug <- function(pairs,
     )
   }
 
+  # Loop over each requested number of calibration groups and, within that, each
+  # drug class. The n_groups column records which cal_groups setting produced each
+  # row so all requested settings can be returned in a single stacked data frame.
   result <- NULL
-  for (drug in drugs_with_pairs) {
-    drug_pairs <- dplyr::filter(pairs, index_drug == drug)
+  for (cg in cal_groups) {
+    for (drug in drugs_with_pairs) {
+      drug_pairs <- dplyr::filter(pairs, index_drug == drug)
 
-    drug_deciles <- benefit_deciles(
-      pairs = drug_pairs,
-      cal_groups = cal_groups,
-      bootstrap = bootstrap,
-      n_boot = n_boot,
-      boot_seed = boot_seed,
-      conf = conf
-    )
-    drug_deciles$index_drug <- drug
+      drug_deciles <- benefit_deciles(
+        pairs = drug_pairs,
+        cal_groups = cg,
+        bootstrap = bootstrap,
+        n_boot = n_boot,
+        boot_seed = boot_seed,
+        conf = conf
+      )
+      drug_deciles$index_drug <- drug
+      drug_deciles$n_groups <- cg
 
-    result <- dplyr::bind_rows(result, drug_deciles)
+      result <- dplyr::bind_rows(result, drug_deciles)
+    }
   }
 
   # Keep the full drug list as factor levels so downstream ordering / faceting is
   # consistent regardless of which drug classes were summarised.
   result$index_drug <- factor(result$index_drug, levels = drugs)
 
-  result
+  # Lead with the identifying columns (drug class and grouping setting).
+  result %>%
+    dplyr::select(index_drug, n_groups, group, pred.benefit, obs.benefit, n,
+                  lower.ci, upper.ci)
 }

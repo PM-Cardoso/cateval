@@ -61,6 +61,23 @@ test_that("benefit_by_drug groups by index_drug with the full drug list as level
   expect_true("index_drug" %in% names(byd))
   expect_true(is.factor(byd$index_drug))
   expect_setequal(levels(byd$index_drug), test_drugs)
+  # A single cal_groups value still yields an n_groups column recording it.
+  expect_true("n_groups" %in% names(byd))
+  expect_setequal(unique(byd$n_groups), 3)
+})
+
+test_that("benefit_by_drug accepts a vector of cal_groups and stacks all of them", {
+  d <- make_test_data()
+  m <- match_benefit_pairs(
+    d, "drugclass", "posthba1cfinal", paste0("pred.", test_drugs),
+    matching_var = test_matching_var, seed = 1
+  )
+  byd <- suppressWarnings(benefit_by_drug(m$combined, drugs = test_drugs, cal_groups = c(3, 5)))
+  expect_true("n_groups" %in% names(byd))
+  expect_setequal(unique(byd$n_groups), c(3, 5))
+  # Each requested cal_groups setting is summarised for the drugs that anchor pairs.
+  single <- suppressWarnings(benefit_by_drug(m$combined, drugs = test_drugs, cal_groups = 3))
+  expect_equal(sum(byd$n_groups == 3), nrow(single))
 })
 
 test_that("bootstrap option runs and returns finite intervals", {
