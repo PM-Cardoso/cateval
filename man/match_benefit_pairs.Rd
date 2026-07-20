@@ -13,6 +13,12 @@ match_benefit_pairs(
   match.exact = NULL,
   match.antiexact = NULL,
   caliper = NULL,
+  std.caliper = TRUE,
+  method = "nearest",
+  distance = "mahalanobis",
+  replace = TRUE,
+  ratio = 1,
+  match_args = list(),
   conc_tolerance = NULL,
   symmetric = TRUE,
   seed = NULL
@@ -42,7 +48,27 @@ exactly. The predicted-best drug is always included.}
 a matched pair must differ. The received-drug variable is always included.}
 
 \item{caliper}{Optional named numeric vector passed to \code{MatchIt::matchit}
-(e.g. \code{c(prehba1c = 0.4)}); interpreted in standard-deviation units.}
+(e.g. \code{c(prehba1c = 0.4)}); interpreted in standard-deviation units by
+default (see \code{std.caliper}).}
+
+\item{std.caliper}{Logical. If \code{TRUE} (default), \code{caliper} is read
+in standard-deviation units; if \code{FALSE}, in the variable's own units.}
+
+\item{method}{Character. Matching method passed to \code{MatchIt::matchit}
+(default \code{"nearest"}).}
+
+\item{distance}{Character. Distance measure passed to
+\code{MatchIt::matchit} (default \code{"mahalanobis"}).}
+
+\item{replace}{Logical. Whether a control patient may be reused in more than
+one pair (default \code{TRUE}). See the note on confidence intervals below.}
+
+\item{ratio}{Numeric. Number of controls matched to each treated patient
+(default \code{1}).}
+
+\item{match_args}{Optional named list of further arguments for
+\code{MatchIt::matchit}. Applied last, so it overrides the arguments above
+and gives access to any matching option not exposed here.}
 
 \item{conc_tolerance}{Optional numeric. If supplied, a patient is concordant
 when they received any drug within this tolerance of the best predicted
@@ -99,12 +125,13 @@ the observed outcome of the discordant patient minus that of the concordant
 patient. Both are positive when the model's recommended drug is expected to,
 and does, give the better outcome.
 
-The matched pairs frames are the input to \code{\link{benefit_deciles}},
-\code{\link{benefit_overall}}, \code{\link{benefit_calibration}} and
+The matched pairs frames are the input to \code{\link{benefit_by_group}},
+\code{\link{benefit_overall}}, \code{\link{benefit_citl_slope}} and
 \code{\link{benefit_by_drug}}.
 
 \strong{Limitation (confidence intervals under matching with replacement).}
-Matching is done with replacement, so a single control patient can appear in
+Matching is done with replacement by default (\code{replace = TRUE}), so a
+single control patient can appear in
 several matched pairs, which makes pairs that share a control not independent.
 The confidence intervals from the summary functions -- both the analytical
 interval and the optional pair-level bootstrap -- treat matched pairs as
@@ -115,6 +142,8 @@ is a known hard problem; the intervals here should be read as approximate, and
 this limitation stated when they are reported. The extent of reuse can be
 inspected directly, e.g.
 \code{table(table(c(pairs$cateval_row_id_conc, pairs$cateval_row_id_disc)))}.
+Setting \code{replace = FALSE} removes this dependence (each control is used
+at most once), at the cost of fewer and generally poorer-quality matches.
 }
 \examples{
 \dontrun{
@@ -132,11 +161,11 @@ matched <- match_benefit_pairs(
 # inspect balance
 plot(summary(matched$matchit$concordant))
 # summarise the pooled set
-benefit_deciles(matched$combined, cal_groups = 10)
+benefit_by_group(matched$combined, cal_groups = 10)
 }
 
 }
 \seealso{
-\code{\link{benefit_deciles}}, \code{\link{benefit_overall}},
-\code{\link{benefit_calibration}}, \code{\link{benefit_by_drug}}
+\code{\link{benefit_by_group}}, \code{\link{benefit_overall}},
+\code{\link{benefit_citl_slope}}, \code{\link{benefit_by_drug}}
 }

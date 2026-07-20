@@ -22,18 +22,18 @@
 #'   \code{calibration_slope}) and columns \code{estimate}, \code{lower.ci} and
 #'   \code{upper.ci}.
 #'
-#' @seealso \code{\link{match_benefit_pairs}}, \code{\link{benefit_deciles}}
+#' @seealso \code{\link{match_benefit_pairs}}, \code{\link{benefit_by_group}}
 #'
 #' @examples
 #' \dontrun{
-#' benefit_calibration(matched$combined)
-#' benefit_calibration(matched$combined, bootstrap = TRUE, boot_seed = 42)
+#' benefit_citl_slope(matched$combined)
+#' benefit_citl_slope(matched$combined, bootstrap = TRUE, boot_seed = 42)
 #' }
 #'
 #' @importFrom stats lm coef confint
 #' @importFrom boot boot
 #' @export
-benefit_calibration <- function(pairs,
+benefit_citl_slope <- function(pairs,
                                 bootstrap = FALSE,
                                 n_boot = 1000,
                                 boot_seed = NULL,

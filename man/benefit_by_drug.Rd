@@ -29,7 +29,7 @@ classes present in \code{pairs} are used.}
 
 \item{cal_groups}{Numeric scalar or vector. Number(s) of groups per drug class
 (e.g. \code{10}, or \code{c(3, 5, 10)}). Each value is passed in turn to
-\code{\link{benefit_deciles}} and the results are stacked, with an
+\code{\link{benefit_by_group}} and the results are stacked, with an
 \code{n_groups} column recording which setting produced each row.}
 
 \item{bootstrap}{Logical. Use pair-level bootstrap confidence intervals.}
@@ -41,14 +41,14 @@ classes present in \code{pairs} are used.}
 \item{conf}{Numeric. Confidence level (default 0.95).}
 }
 \value{
-A data frame stacking the \code{\link{benefit_deciles}} output for each
+A data frame stacking the \code{\link{benefit_by_group}} output for each
 drug class and each requested \code{cal_groups} value, with an
 \code{index_drug} column identifying the drug class that anchors each group
 and an \code{n_groups} column giving the number of calibration groups used.
 Suitable for faceting.
 }
 \description{
-Runs \code{\link{benefit_deciles}} separately within each drug class, where a
+Runs \code{\link{benefit_by_group}} separately within each drug class, where a
 matched pair is assigned to the drug class received by its index (matched)
 patient. This shows whether the model's benefit predictions are well
 calibrated within the group of pairs anchored on each drug class.
@@ -61,5 +61,5 @@ benefit_by_drug(matched$combined, cal_groups = c(3, 5, 10))
 
 }
 \seealso{
-\code{\link{benefit_deciles}}, \code{\link{match_benefit_pairs}}
+\code{\link{benefit_by_group}}, \code{\link{match_benefit_pairs}}
 }

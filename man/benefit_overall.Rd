@@ -47,5 +47,5 @@ benefit_overall(matched$combined, bootstrap = TRUE, boot_seed = 42)
 
 }
 \seealso{
-\code{\link{match_benefit_pairs}}, \code{\link{benefit_deciles}}
+\code{\link{match_benefit_pairs}}, \code{\link{benefit_by_group}}
 }

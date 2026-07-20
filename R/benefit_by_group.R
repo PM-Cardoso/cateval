@@ -46,15 +46,15 @@
 #'
 #' @examples
 #' \dontrun{
-#' benefit_deciles(matched$combined, cal_groups = 10)
-#' benefit_deciles(matched$combined, cal_groups = 10, bootstrap = TRUE, boot_seed = 42)
+#' benefit_by_group(matched$combined, cal_groups = 10)
+#' benefit_by_group(matched$combined, cal_groups = 10, bootstrap = TRUE, boot_seed = 42)
 #' }
 #'
 #' @importFrom dplyr group_by summarise mutate n
 #' @importFrom stats quantile sd qt
 #' @importFrom boot boot
 #' @export
-benefit_deciles <- function(pairs,
+benefit_by_group <- function(pairs,
                             cal_groups = 10,
                             bootstrap = FALSE,
                             n_boot = 1000,

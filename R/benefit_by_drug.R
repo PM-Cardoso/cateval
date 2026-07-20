@@ -1,6 +1,6 @@
 #' Overall-Benefit Calibration Split by Drug Class
 #'
-#' Runs \code{\link{benefit_deciles}} separately within each drug class, where a
+#' Runs \code{\link{benefit_by_group}} separately within each drug class, where a
 #' matched pair is assigned to the drug class received by its index (matched)
 #' patient. This shows whether the model's benefit predictions are well
 #' calibrated within the group of pairs anchored on each drug class.
@@ -17,20 +17,20 @@
 #'   classes present in \code{pairs} are used.
 #' @param cal_groups Numeric scalar or vector. Number(s) of groups per drug class
 #'   (e.g. \code{10}, or \code{c(3, 5, 10)}). Each value is passed in turn to
-#'   \code{\link{benefit_deciles}} and the results are stacked, with an
+#'   \code{\link{benefit_by_group}} and the results are stacked, with an
 #'   \code{n_groups} column recording which setting produced each row.
 #' @param bootstrap Logical. Use pair-level bootstrap confidence intervals.
 #' @param n_boot Integer. Number of bootstrap replicates.
 #' @param boot_seed Optional integer. Seed for reproducibility.
 #' @param conf Numeric. Confidence level (default 0.95).
 #'
-#' @return A data frame stacking the \code{\link{benefit_deciles}} output for each
+#' @return A data frame stacking the \code{\link{benefit_by_group}} output for each
 #'   drug class and each requested \code{cal_groups} value, with an
 #'   \code{index_drug} column identifying the drug class that anchors each group
 #'   and an \code{n_groups} column giving the number of calibration groups used.
 #'   Suitable for faceting.
 #'
-#' @seealso \code{\link{benefit_deciles}}, \code{\link{match_benefit_pairs}}
+#' @seealso \code{\link{benefit_by_group}}, \code{\link{match_benefit_pairs}}
 #'
 #' @examples
 #' \dontrun{
@@ -85,7 +85,7 @@ benefit_by_drug <- function(pairs,
     for (drug in drugs_with_pairs) {
       drug_pairs <- dplyr::filter(pairs, index_drug == drug)
 
-      drug_deciles <- benefit_deciles(
+      drug_deciles <- benefit_by_group(
         pairs = drug_pairs,
         cal_groups = cg,
         bootstrap = bootstrap,

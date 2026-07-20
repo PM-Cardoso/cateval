@@ -131,29 +131,44 @@
 }
 
 
-# Run one nearest-neighbour Mahalanobis match -------------------------------
+# Run one match -------------------------------------------------------------
 #
 # A single matching direction. The treated group is whichever group the caller
 # has put in the cateval_treated column (concordant patients in one direction,
-# discordant patients in the other). Matching is 1:1 with replacement, exact on
-# the predicted-best drug, and forced to differ on the received drug.
+# discordant patients in the other). The matching is exact on the predicted-best
+# drug and forced to differ on the received drug; the remaining behaviour is
+# controlled by the caller and defaults to 1:1 nearest-neighbour Mahalanobis
+# matching with replacement.
+#
+# match_args is applied last, so it takes precedence over the named arguments
+# and can supply any other MatchIt::matchit() argument.
 #
 # @return A MatchIt "matchit" object.
 # @noRd
-.run_benefit_match <- function(data, formula_str, exact_vars, antiexact_vars, caliper, seed) {
+.run_benefit_match <- function(data, formula_str, exact_vars, antiexact_vars,
+                               caliper, seed,
+                               method = "nearest",
+                               distance = "mahalanobis",
+                               replace = TRUE,
+                               ratio = 1,
+                               std.caliper = TRUE,
+                               match_args = list()) {
   if (!is.null(seed)) set.seed(seed)
 
-  MatchIt::matchit(
+  args <- list(
     formula = stats::as.formula(formula_str),
     data = data,
-    method = "nearest",
-    distance = "mahalanobis",
-    replace = TRUE,
+    method = method,
+    distance = distance,
+    replace = replace,
+    ratio = ratio,
     exact = exact_vars,
     antiexact = antiexact_vars,
     caliper = caliper,
-    std.caliper = TRUE
+    std.caliper = std.caliper
   )
+
+  do.call(MatchIt::matchit, utils::modifyList(args, match_args))
 }
 
 
@@ -243,6 +258,65 @@
   )
 
   pairs
+}
+
+
+# Outcome-model formula for one calibration group ---------------------------
+#
+# The treatment effect is the second coefficient of a model of the outcome on
+# the received drug, optionally adjusted for covariates. Categorical adjustment
+# variables are included only when they vary within the group, since a constant
+# factor cannot be estimated.
+#
+# @return A formula string.
+# @noRd
+.pairwise_group_formula <- function(group_data, adjustment_var) {
+  formula_str <- "dataset_outcome_var ~ dataset_drug_var"
+
+  if (!is.null(adjustment_var)) {
+    is_cat <- sapply(
+      group_data[, adjustment_var, drop = FALSE],
+      function(x) is.factor(x) || is.character(x)
+    )
+    cat_vars  <- adjustment_var[is_cat]
+    cont_vars <- setdiff(adjustment_var, cat_vars)
+
+    if (length(cont_vars) > 0) {
+      formula_str <- paste(formula_str, paste(cont_vars, collapse = " + "), sep = " + ")
+    }
+    for (v in cat_vars) {
+      if (length(unique(group_data[[v]])) > 1) {
+        formula_str <- paste(formula_str, "+", v)
+      }
+    }
+  }
+
+  formula_str
+}
+
+
+# Treatment-effect coefficient for one calibration group --------------------
+#
+# Used for the bootstrap replicates, where a resampled group may happen to
+# contain only one of the two drugs (or produce an unestimable model). Such a
+# replicate contributes NA rather than stopping the bootstrap.
+#
+# @return A single number, or NA_real_ when the effect cannot be estimated.
+# @noRd
+.pairwise_group_coef <- function(group_data, drugs, adjustment_var) {
+  group_data$dataset_drug_var <- factor(group_data$dataset_drug_var, levels = rev(drugs))
+
+  if (length(unique(stats::na.omit(group_data$dataset_drug_var))) < 2) {
+    return(NA_real_)
+  }
+
+  model <- try(
+    stats::glm(stats::as.formula(.pairwise_group_formula(group_data, adjustment_var)), data = group_data),
+    silent = TRUE
+  )
+  if (inherits(model, "try-error")) return(NA_real_)
+
+  unname(stats::coef(model)[2])
 }
 
 

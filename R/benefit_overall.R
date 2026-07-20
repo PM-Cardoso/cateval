@@ -20,7 +20,7 @@
 #' @return A one-row data frame with \code{observed} (mean observed benefit),
 #'   \code{lower.ci}, \code{upper.ci} and \code{n} (number of pairs).
 #'
-#' @seealso \code{\link{match_benefit_pairs}}, \code{\link{benefit_deciles}}
+#' @seealso \code{\link{match_benefit_pairs}}, \code{\link{benefit_by_group}}
 #'
 #' @examples
 #' \dontrun{

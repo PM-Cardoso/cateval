@@ -67,16 +67,16 @@ reference:
       predicted benefit of following the model matches the observed benefit.
     contents:
       - match_benefit_pairs
-      - benefit_deciles
+      - benefit_by_group
       - benefit_by_drug
       - benefit_overall
-      - benefit_calibration
+      - benefit_citl_slope
   - title: "Pairwise drug-class calibration"
     desc: >
       Compare predicted and observed treatment effects between pairs of drugs.
     contents:
-      - unified_validation
-      - calibration_hte
+      - pairwise_calibration
+      - pairwise_calibration_pair
   - title: "Predicted-best drug utilities"
     desc: >
       Identify the recommended drug (or the set of near-best drugs) for each
@@ -84,4 +84,4 @@ reference:
     contents:
       - get_best_drugs
       - get_ranked_or_tolerant_drugs
-      - optimal_drug_comparison_plot
+      - plot_optimal_drugs

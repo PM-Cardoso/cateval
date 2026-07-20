@@ -36,7 +36,7 @@ test_that("benefit summaries return the expected shapes", {
     matching_var = test_matching_var, seed = 1
   )
 
-  dec <- benefit_deciles(m$combined, cal_groups = 5)
+  dec <- benefit_by_group(m$combined, cal_groups = 5)
   expect_true(all(
     c("group", "pred.benefit", "obs.benefit", "n", "lower.ci", "upper.ci") %in% names(dec)
   ))
@@ -46,7 +46,7 @@ test_that("benefit summaries return the expected shapes", {
   expect_equal(nrow(ov), 1L)
   expect_true(all(c("observed", "lower.ci", "upper.ci", "n") %in% names(ov)))
 
-  cal <- benefit_calibration(m$combined)
+  cal <- benefit_citl_slope(m$combined)
   expect_equal(nrow(cal), 2L)
   expect_setequal(cal$metric, c("calibration_in_the_large", "calibration_slope"))
 })
@@ -89,7 +89,7 @@ test_that("bootstrap option runs and returns finite intervals", {
   ov <- benefit_overall(m$combined, bootstrap = TRUE, n_boot = 50, boot_seed = 1)
   expect_true(is.finite(ov$lower.ci) && is.finite(ov$upper.ci))
 
-  cal <- benefit_calibration(m$combined, bootstrap = TRUE, n_boot = 50, boot_seed = 1)
+  cal <- benefit_citl_slope(m$combined, bootstrap = TRUE, n_boot = 50, boot_seed = 1)
   expect_true(all(is.finite(cal$lower.ci)) && all(is.finite(cal$upper.ci)))
 })
 

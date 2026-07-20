@@ -19,23 +19,45 @@ The package is designed for both **pairwise comparisons** (two treatments) and *
 ### Overall-benefit calibration
 
 - **`match_benefit_pairs()`** — Match concordant patients (received the recommended drug) to discordant patients, in both directions, returning the concordant, discordant and combined matched populations for inspection
-- **`benefit_deciles()`** — Mean observed benefit by group of predicted benefit (the calibration-plot data)
+- **`benefit_by_group()`** — Mean observed benefit by group of predicted benefit (the calibration-plot data)
 - **`benefit_by_drug()`** — The same, split by recommended drug class
 - **`benefit_overall()`** — Mean observed benefit of following the model
-- **`benefit_calibration()`** — Calibration-in-the-large and calibration slope of predicted benefit
+- **`benefit_citl_slope()`** — Calibration-in-the-large and calibration slope of predicted benefit
 
 Each summary reports analytical confidence intervals by default, or optional pair-level bootstrap intervals. Plotting is left to the user (see the worked example) so the calibration plot can be built with whatever detail the analysis calls for — this package only produces the underlying group and pair-level numbers.
 
 ### Pairwise drug-class calibration
 
-- **`unified_validation()`** — Predicted vs observed treatment effects across all drug pairs
-- **`calibration_hte()`** — The underlying single-pair calibration engine
+- **`pairwise_calibration()`** — Predicted vs observed treatment effects across all drug pairs
+- **`pairwise_calibration_pair()`** — The underlying single-pair calibration engine
+
+Optional covariate matching (`matching = TRUE`) is performed once per drug pair and
+reused across every `cal_groups` setting. Set `return_matched = TRUE` to get the
+matched cohort and `matchit` object back for balance checking, and
+`bootstrap = TRUE` for percentile bootstrap intervals in place of the Wald intervals.
+
+### Customising the matching
+
+Both workflows use `MatchIt` and default to 1:1 nearest-neighbour Mahalanobis matching
+with replacement. `method`, `distance`, `replace`, `ratio`, `caliper`, `std.caliper` and
+`seed` are all available, and `match_args` passes any other `MatchIt::matchit()` argument
+straight through:
+
+``` r
+match_benefit_pairs(
+  ...,
+  replace    = FALSE,                  # each control used at most once
+  ratio      = 2,                      # two controls per treated patient
+  caliper    = c(prehba1c = 0.4),      # in SD units by default
+  match_args = list(m.order = "random")
+)
+```
 
 ### Predicted-best drug utilities
 
 - **`get_best_drugs()`** — Identify the recommended drug (or the near-best set) for each patient
 - **`get_ranked_or_tolerant_drugs()`** — Rank or select treatments meeting a tolerance threshold
-- **`optimal_drug_comparison_plot()`** — Visualise the distribution of recommended drug combinations
+- **`plot_optimal_drugs()`** — Visualise the distribution of recommended drug combinations
 
 ### Built-in Support for
 
@@ -67,7 +89,7 @@ library(cateval)
 drugs <- c("SGLT2", "GLP1", "DPP4", "SU", "TZD")
 
 # Pairwise heterogeneous treatment effect calibration across all drug pairs
-pairwise_results <- unified_validation(
+pairwise_results <- pairwise_calibration(
   data            = your_data,
   drug_var        = "drugclass",
   drugs           = drugs,
@@ -91,14 +113,14 @@ matched <- match_benefit_pairs(
 )
 
 # 2. summarise (set bootstrap = TRUE for pair-level bootstrap intervals)
-deciles <- benefit_deciles(matched$combined, cal_groups = 10)
-overall <- benefit_overall(matched$combined)
-slope   <- benefit_calibration(matched$combined)
+by_group <- benefit_by_group(matched$combined, cal_groups = 10)
+overall  <- benefit_overall(matched$combined)
+slope    <- benefit_citl_slope(matched$combined)
 
 # 3. plot the calibration yourself: group means + identity line + a LOESS
-# curve fitted on the group (decile) point estimates
+# curve fitted on the group point estimates
 library(ggplot2)
-ggplot(deciles, aes(x = pred.benefit, y = obs.benefit)) +
+ggplot(by_group, aes(x = pred.benefit, y = obs.benefit)) +
   geom_abline(intercept = 0, slope = 1, colour = "red", linetype = "dashed") +
   geom_smooth(method = "loess", se = TRUE, span = 1, colour = "blue") +
   geom_errorbar(aes(ymin = lower.ci, ymax = upper.ci), width = 0.2) +
@@ -113,7 +135,7 @@ best_drugs <- get_best_drugs(
 )
 
 # Visualise the distribution of predicted-optimal drug combinations
-optimal_drug_comparison_plot(
+plot_optimal_drugs(
   data   = best_drugs$pred.within_3_of_best_drug_name,
   groups = list("1-drug" = 1, "2-drug" = 2, "3+-drug" = 3:5)
 )
