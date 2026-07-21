@@ -1,3 +1,16 @@
+# cateval 2.1.1
+
+Documentation-only fixes; no change to any function's behaviour or output.
+
+* `pairwise_calibration()`: the `@return` documentation listed `cal_groups` and
+  `grouping` columns that the function does not produce. It now documents the
+  columns actually returned (`mean`, `coef`, `coef_low`, `coef_high`, `n_groups`,
+  `drug1`, `n_drug1`, `drug2`, `n_drug2`). Note that the output has no per-group
+  identifier column; rows are ordered by group within each `n_groups` block.
+* `benefit_citl_slope()`: the `@return` documentation omitted the `metric` column
+  that identifies each row (`calibration_in_the_large` / `calibration_slope`); it
+  is now documented alongside `estimate`, `lower.ci` and `upper.ci`.
+
 # cateval 2.1.0
 
 All changes below are additive: every new argument defaults to the behaviour of

@@ -18,9 +18,9 @@
 #' @param boot_seed Optional integer. Seed for reproducibility.
 #' @param conf Numeric. Confidence level (default 0.95).
 #'
-#' @return A data frame with two rows (\code{calibration_in_the_large} and
-#'   \code{calibration_slope}) and columns \code{estimate}, \code{lower.ci} and
-#'   \code{upper.ci}.
+#' @return A data frame with one row per metric and columns \code{metric}
+#'   (\code{calibration_in_the_large} or \code{calibration_slope}),
+#'   \code{estimate}, \code{lower.ci} and \code{upper.ci}.
 #'
 #' @seealso \code{\link{match_benefit_pairs}}, \code{\link{benefit_by_group}}
 #'

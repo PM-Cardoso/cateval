@@ -53,12 +53,11 @@
 #'
 #' @return By default, a data.frame with one row per calibration group and drug pair combination, including:
 #' \describe{
-#'   \item{cal_groups}{Number of calibration groups used.}
-#'   \item{grouping}{Calibration group identifier (e.g., 1 through `cal_groups`).}
 #'   \item{mean}{Mean predicted benefit in the calibration group.}
 #'   \item{coef}{Estimated treatment effect (regression coefficient) within the group.}
-#'   \item{coef_low}{Lower bound of the 95% confidence interval for the estimate.}
-#'   \item{coef_high}{Upper bound of the 95% confidence interval.}
+#'   \item{coef_low}{Lower bound of the confidence interval for the estimate.}
+#'   \item{coef_high}{Upper bound of the confidence interval.}
+#'   \item{n_groups}{Number of calibration groups used for this stratification (the `cal_groups` value that produced the row).}
 #'   \item{drug1}{Name of the first drug in the pair.}
 #'   \item{n_drug1}{Number of patients in the group receiving the first drug.}
 #'   \item{drug2}{Name of the second drug in the pair.}
