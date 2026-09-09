@@ -11,8 +11,7 @@ utils::globalVariables(c(
   "cateval_best_drug", "cateval_concordant", "cateval_row_id",
   "cateval_tol_list", "cateval_tol_set", "cateval_treated",
   "concordant_drug", "dataset_benefit", "dataset_drug_var",
-  "discordant_drug", "drug", "drug_1_pred", "drug_2_pred",
-  "drug_count", "drugs", "group", "index_drug", "lower.ci",
-  "obs.benefit", "pair_key", "pred.benefit", "se", "subclass",
-  "upper.ci"
+  "discordant_drug", "drug", "drug_count", "drugs", "group",
+  "grouping", "index_drug", "lower.ci", "n_groups", "obs.benefit",
+  "pair_key", "pred.benefit", "se", "subclass", "upper.ci"
 ))

@@ -165,3 +165,143 @@ test_that("match_args reaches matchit and overrides the named arguments", {
 
   expect_equal(named$combined, via_args$combined)
 })
+
+
+# Per-direction matching arguments -----------------------------------------
+# match_args applies to both directions; match_args_conc / match_args_disc
+# override it for one. Empty lists must reproduce the previous behaviour.
+
+benefit_args <- function(d, ...) {
+  args <- list(
+    data = d,
+    drug_var = "drugclass",
+    outcome_var = "posthba1cfinal",
+    pred_cols = paste0("pred.", test_drugs),
+    matching_var = test_matching_var,
+    seed = 1
+  )
+  utils::modifyList(args, list(...))
+}
+
+
+test_that("empty per-direction lists reproduce the previous behaviour", {
+  d <- make_test_data()
+
+  implicit <- do.call(match_benefit_pairs, benefit_args(d))
+  explicit <- do.call(match_benefit_pairs, benefit_args(
+    d, match_args_conc = list(), match_args_disc = list()
+  ))
+
+  expect_equal(implicit$concordant, explicit$concordant)
+  expect_equal(implicit$discordant, explicit$discordant)
+  expect_equal(implicit$combined, explicit$combined)
+})
+
+
+test_that("match_args_conc affects only the concordant direction", {
+  d <- make_test_data()
+
+  base <- do.call(match_benefit_pairs, benefit_args(d))
+  conc <- suppressWarnings(do.call(match_benefit_pairs, benefit_args(
+    d, match_args_conc = list(replace = FALSE)
+  )))
+
+  expect_false(identical(base$concordant, conc$concordant))
+  expect_equal(base$discordant, conc$discordant)
+})
+
+
+test_that("match_args_disc affects only the discordant direction", {
+  d <- make_test_data()
+
+  base <- do.call(match_benefit_pairs, benefit_args(d))
+  disc <- suppressWarnings(do.call(match_benefit_pairs, benefit_args(
+    d, match_args_disc = list(replace = FALSE)
+  )))
+
+  expect_equal(base$concordant, disc$concordant)
+  expect_false(identical(base$discordant, disc$discordant))
+})
+
+
+test_that("a direction list overrides the shared list", {
+  d <- make_test_data()
+
+  # shared replace = TRUE, overridden to FALSE for the discordant direction only
+  layered <- suppressWarnings(do.call(match_benefit_pairs, benefit_args(
+    d,
+    match_args = list(replace = TRUE),
+    match_args_disc = list(replace = FALSE)
+  )))
+  # the same thing said directly
+  direct <- suppressWarnings(do.call(match_benefit_pairs, benefit_args(
+    d, match_args_disc = list(replace = FALSE)
+  )))
+
+  expect_equal(layered$concordant, direct$concordant)
+  expect_equal(layered$discordant, direct$discordant)
+})
+
+
+test_that("NULL in a direction list unsets that argument for one direction", {
+  d <- make_test_data()
+
+  # caliper set for both, then removed for the discordant direction; that
+  # direction must therefore agree with a run that never had a caliper
+  unset <- do.call(match_benefit_pairs, benefit_args(
+    d,
+    caliper = c(prehba1c = 0.4),
+    match_args_disc = list(caliper = NULL)
+  ))
+  no_caliper <- do.call(match_benefit_pairs, benefit_args(d))
+  with_caliper <- do.call(match_benefit_pairs, benefit_args(
+    d, caliper = c(prehba1c = 0.4)
+  ))
+
+  expect_equal(unset$discordant, no_caliper$discordant)
+  expect_equal(unset$concordant, with_caliper$concordant)
+})
+
+
+test_that("the forced exact / antiexact constraints survive a match_args override", {
+  d <- make_test_data()
+
+  m <- do.call(match_benefit_pairs, benefit_args(
+    d, match_args = list(exact = "sex", antiexact = NULL)
+  ))
+
+  # anti-exact on the received drug: a pair must have taken two different drugs
+  expect_true(all(m$combined$concordant_drug != m$combined$discordant_drug))
+  # exact on the predicted-best drug: still honoured, and the caller's own
+  # exact variable is added rather than replacing it. matchit() stores `exact`
+  # as a terms formula, so the variable names come from all.vars().
+  exact_used <- all.vars(m$matchit$concordant$exact)
+  expect_true("cateval_best_drug" %in% exact_used)
+  expect_true("sex" %in% exact_used)
+})
+
+
+test_that("match_args_disc warns when symmetric = FALSE", {
+  d <- make_test_data()
+
+  expect_warning(
+    do.call(match_benefit_pairs, benefit_args(
+      d, symmetric = FALSE, match_args_disc = list(replace = FALSE)
+    )),
+    "symmetric"
+  )
+})
+
+
+test_that("unnamed matching-argument lists are rejected", {
+  d <- make_test_data()
+
+  expect_error(
+    do.call(match_benefit_pairs, benefit_args(d, match_args = list("nearest"))),
+    "fully named"
+  )
+  expect_error(
+    do.call(match_benefit_pairs, benefit_args(d, match_args_conc = list(1))),
+    "fully named"
+  )
+})

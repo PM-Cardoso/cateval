@@ -55,8 +55,14 @@
 #' @param ratio Numeric. Number of controls matched to each treated patient
 #'   (default \code{1}).
 #' @param match_args Optional named list of further arguments for
-#'   \code{MatchIt::matchit}. Applied last, so it overrides the arguments above
-#'   and gives access to any matching option not exposed here.
+#'   \code{MatchIt::matchit}, applied to both matching directions. Overrides the
+#'   arguments above and gives access to any matching option not exposed here.
+#' @param match_args_conc Optional named list of \code{MatchIt::matchit}
+#'   arguments applied only to the concordant-as-treated direction, on top of
+#'   \code{match_args}.
+#' @param match_args_disc As \code{match_args_conc}, for the
+#'   discordant-as-treated direction. Ignored (with a warning) when
+#'   \code{symmetric = FALSE}, since that direction is not run.
 #' @param conc_tolerance Optional numeric. If supplied, a patient is concordant
 #'   when they received any drug within this tolerance of the best predicted
 #'   outcome, and a discordant match must differ from every drug in that set.
@@ -85,6 +91,23 @@
 #' The matched pairs frames are the input to \code{\link{benefit_by_group}},
 #' \code{\link{benefit_overall}}, \code{\link{benefit_citl_slope}} and
 #' \code{\link{benefit_by_drug}}.
+#'
+#' \strong{Order of precedence for matching arguments.} Each direction is built
+#' from the package defaults, then the named arguments above (\code{method},
+#' \code{distance}, \code{replace}, \code{ratio}, \code{caliper},
+#' \code{std.caliper}), then \code{match_args}, then that direction's own
+#' \code{match_args_conc} or \code{match_args_disc}. Later links win, so a
+#' direction list overrides the shared list, which overrides the named
+#' arguments. Because \code{utils::modifyList} treats \code{NULL} as removal,
+#' \code{match_args_disc = list(caliper = NULL)} unsets the caliper for the
+#' discordant direction only.
+#'
+#' \strong{Protected constraints.} Matching is always exact on the
+#' predicted-best drug and always anti-exact on \code{drug_var} (and on the
+#' tolerance-set columns when \code{conc_tolerance} is used). These are
+#' re-applied after every override, so supplying \code{exact} or
+#' \code{antiexact} through \code{match_args} adds to them rather than replacing
+#' them.
 #'
 #' \strong{Limitation (confidence intervals under matching with replacement).}
 #' Matching is done with replacement by default (\code{replace = TRUE}), so a
@@ -122,6 +145,19 @@
 #' plot(summary(matched$matchit$concordant))
 #' # summarise the pooled set
 #' benefit_by_group(matched$combined, cal_groups = 10)
+#'
+#' # the same specification, but matching the (larger) discordant direction
+#' # without replacement and two controls per treated patient
+#' matched2 <- match_benefit_pairs(
+#'   data = analysis_dataset,
+#'   drug_var = "drugclass",
+#'   outcome_var = "posthba1cfinal",
+#'   pred_cols = paste0("pred.", c("SGLT2", "GLP1", "DPP4", "SU", "TZD")),
+#'   matching_var = c("agetx", "prebmi", "prehba1c", "sex"),
+#'   match_args = list(m.order = "random"),
+#'   match_args_disc = list(replace = FALSE, ratio = 2),
+#'   seed = 19840503
+#' )
 #' }
 #'
 #' @importFrom MatchIt matchit get_matches
@@ -142,6 +178,8 @@ match_benefit_pairs <- function(data,
                                 replace = TRUE,
                                 ratio = 1,
                                 match_args = list(),
+                                match_args_conc = list(),
+                                match_args_disc = list(),
                                 conc_tolerance = NULL,
                                 symmetric = TRUE,
                                 seed = NULL) {
@@ -165,6 +203,14 @@ match_benefit_pairs <- function(data,
   if (!is.logical(replace)) stop("`replace` must be TRUE or FALSE.")
   if (!is.numeric(ratio) || length(ratio) != 1 || ratio < 1) stop("`ratio` must be a single number of at least 1.")
   if (!is.list(match_args)) stop("`match_args` must be a list.")
+  if (!is.list(match_args_conc)) stop("`match_args_conc` must be a list.")
+  if (!is.list(match_args_disc)) stop("`match_args_disc` must be a list.")
+  .check_named_list(match_args, "match_args")
+  .check_named_list(match_args_conc, "match_args_conc")
+  .check_named_list(match_args_disc, "match_args_disc")
+  if (!isTRUE(symmetric) && length(match_args_disc) > 0) {
+    warning("`match_args_disc` is ignored when `symmetric = FALSE`; the discordant-as-treated direction is not run.")
+  }
 
   prefix <- .common_prefix(pred_cols)
 
@@ -179,7 +225,12 @@ match_benefit_pairs <- function(data,
 
   # ---- Matching specification (shared by both directions) ----
   formula_str <- .build_match_formula(labelled, matching_var, match.exact, match.antiexact)
-  exact_vars <- unique(c("cateval_best_drug", match.exact))
+
+  # Split into the constraints the method requires and the caller's additions,
+  # so the required ones can be re-applied after any match_args override.
+  forced_exact <- "cateval_best_drug"
+  forced_antiexact <- unique(c(drug_var, antiexact_extra))
+  exact_vars <- unique(c(forced_exact, match.exact))
   antiexact_vars <- unique(c(drug_var, match.antiexact, antiexact_extra))
 
   # Covariates to carry through to the pairs output for inspection.
@@ -191,7 +242,9 @@ match_benefit_pairs <- function(data,
   match_conc <- .run_benefit_match(
     data_conc, formula_str, exact_vars, antiexact_vars, caliper, seed,
     method = method, distance = distance, replace = replace, ratio = ratio,
-    std.caliper = std.caliper, match_args = match_args
+    std.caliper = std.caliper, match_args = match_args,
+    match_args_dir = match_args_conc,
+    forced_exact = forced_exact, forced_antiexact = forced_antiexact
   )
   pairs_conc <- .extract_benefit_pairs(
     MatchIt::get_matches(match_conc, data = data_conc),
@@ -205,7 +258,9 @@ match_benefit_pairs <- function(data,
     match_disc <- .run_benefit_match(
       data_disc, formula_str, exact_vars, antiexact_vars, caliper, seed,
       method = method, distance = distance, replace = replace, ratio = ratio,
-      std.caliper = std.caliper, match_args = match_args
+      std.caliper = std.caliper, match_args = match_args,
+      match_args_dir = match_args_disc,
+      forced_exact = forced_exact, forced_antiexact = forced_antiexact
     )
     pairs_disc <- .extract_benefit_pairs(
       MatchIt::get_matches(match_disc, data = data_disc),

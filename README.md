@@ -20,7 +20,7 @@ The package is designed for both **pairwise comparisons** (two treatments) and *
 
 - **`match_benefit_pairs()`** — Match concordant patients (received the recommended drug) to discordant patients, in both directions, returning the concordant, discordant and combined matched populations for inspection
 - **`benefit_by_group()`** — Mean observed benefit by group of predicted benefit (the calibration-plot data)
-- **`benefit_by_drug()`** — The same, split by recommended drug class
+- **`benefit_by_drug()`** — The same, split by the drug class received by the index (matched) patient of each pair
 - **`benefit_overall()`** — Mean observed benefit of following the model
 - **`benefit_citl_slope()`** — Calibration-in-the-large and calibration slope of predicted benefit
 
@@ -52,6 +52,30 @@ match_benefit_pairs(
   match_args = list(m.order = "random")
 )
 ```
+
+`match_benefit_pairs()` matches twice — once with concordant patients as the
+treated group and once with the roles reversed — and the two directions can be
+configured separately. `match_args` applies to both; `match_args_conc` and
+`match_args_disc` are layered on top of it for one direction only:
+
+``` r
+match_benefit_pairs(
+  ...,
+  match_args      = list(m.order = "random"),   # both directions
+  match_args_disc = list(replace = FALSE,       # discordant direction only
+                         ratio   = 2)
+)
+```
+
+Order of precedence, later winning: package defaults → the named arguments above
+→ `match_args` → that direction's own list. Since `modifyList()` treats `NULL` as
+removal, `match_args_disc = list(caliper = NULL)` drops the caliper for the
+discordant direction alone.
+
+Matching is always exact on the predicted-best drug and always anti-exact on the
+received drug — this is what makes a matched pair interpretable as "followed the
+model vs did not". Supplying `exact` or `antiexact` through `match_args` adds to
+those constraints rather than replacing them.
 
 ### Predicted-best drug utilities
 

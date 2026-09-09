@@ -19,6 +19,8 @@ match_benefit_pairs(
   replace = TRUE,
   ratio = 1,
   match_args = list(),
+  match_args_conc = list(),
+  match_args_disc = list(),
   conc_tolerance = NULL,
   symmetric = TRUE,
   seed = NULL
@@ -67,8 +69,16 @@ one pair (default \code{TRUE}). See the note on confidence intervals below.}
 (default \code{1}).}
 
 \item{match_args}{Optional named list of further arguments for
-\code{MatchIt::matchit}. Applied last, so it overrides the arguments above
-and gives access to any matching option not exposed here.}
+\code{MatchIt::matchit}, applied to both matching directions. Overrides the
+arguments above and gives access to any matching option not exposed here.}
+
+\item{match_args_conc}{Optional named list of \code{MatchIt::matchit}
+arguments applied only to the concordant-as-treated direction, on top of
+\code{match_args}.}
+
+\item{match_args_disc}{As \code{match_args_conc}, for the
+discordant-as-treated direction. Ignored (with a warning) when
+\code{symmetric = FALSE}, since that direction is not run.}
 
 \item{conc_tolerance}{Optional numeric. If supplied, a patient is concordant
 when they received any drug within this tolerance of the best predicted
@@ -129,6 +139,23 @@ The matched pairs frames are the input to \code{\link{benefit_by_group}},
 \code{\link{benefit_overall}}, \code{\link{benefit_citl_slope}} and
 \code{\link{benefit_by_drug}}.
 
+\strong{Order of precedence for matching arguments.} Each direction is built
+from the package defaults, then the named arguments above (\code{method},
+\code{distance}, \code{replace}, \code{ratio}, \code{caliper},
+\code{std.caliper}), then \code{match_args}, then that direction's own
+\code{match_args_conc} or \code{match_args_disc}. Later links win, so a
+direction list overrides the shared list, which overrides the named
+arguments. Because \code{utils::modifyList} treats \code{NULL} as removal,
+\code{match_args_disc = list(caliper = NULL)} unsets the caliper for the
+discordant direction only.
+
+\strong{Protected constraints.} Matching is always exact on the
+predicted-best drug and always anti-exact on \code{drug_var} (and on the
+tolerance-set columns when \code{conc_tolerance} is used). These are
+re-applied after every override, so supplying \code{exact} or
+\code{antiexact} through \code{match_args} adds to them rather than replacing
+them.
+
 \strong{Limitation (confidence intervals under matching with replacement).}
 Matching is done with replacement by default (\code{replace = TRUE}), so a
 single control patient can appear in
@@ -162,6 +189,19 @@ matched <- match_benefit_pairs(
 plot(summary(matched$matchit$concordant))
 # summarise the pooled set
 benefit_by_group(matched$combined, cal_groups = 10)
+
+# the same specification, but matching the (larger) discordant direction
+# without replacement and two controls per treated patient
+matched2 <- match_benefit_pairs(
+  data = analysis_dataset,
+  drug_var = "drugclass",
+  outcome_var = "posthba1cfinal",
+  pred_cols = paste0("pred.", c("SGLT2", "GLP1", "DPP4", "SU", "TZD")),
+  matching_var = c("agetx", "prebmi", "prehba1c", "sex"),
+  match_args = list(m.order = "random"),
+  match_args_disc = list(replace = FALSE, ratio = 2),
+  seed = 19840503
+)
 }
 
 }

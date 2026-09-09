@@ -174,9 +174,7 @@ pairwise_calibration <- function(data,
       dplyr::filter(dataset_drug_var %in% pair) %>%
       dplyr::mutate(
         dataset_drug_var = factor(dataset_drug_var, levels = rev(pair)),
-        drug_1_pred = .[[prediction_map[[pair[1]]]]],
-        drug_2_pred = .[[prediction_map[[pair[2]]]]],
-        benefit = drug_1_pred - drug_2_pred
+        benefit = .[[prediction_map[[pair[1]]]]] - .[[prediction_map[[pair[2]]]]]
       )
     
     calibration_result <- pairwise_calibration_pair(

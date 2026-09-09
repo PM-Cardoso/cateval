@@ -164,10 +164,6 @@ pairwise_calibration_pair <- function(data,
                             boot_seed = NULL,
                             conf = 0.95) {
 
-  # Load Required Libraries (granularly)
-  if (!requireNamespace("dplyr", quietly = TRUE)) stop("Package 'dplyr' is required.")
-  if (!requireNamespace("MatchIt", quietly = TRUE)) stop("Package 'MatchIt' is required.")
-
   # Use package-qualified functions throughout
   `%>%` <- dplyr::`%>%`
 

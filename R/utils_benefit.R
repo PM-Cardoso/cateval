@@ -112,8 +112,10 @@
 #
 # Continuous covariates enter directly (Mahalanobis distance handles them);
 # categorical covariates are added only when they have more than one level in
-# the data. Variables handled by exact / anti-exact matching are dropped from
-# the distance formula.
+# the data. Continuous covariates already handled by exact / anti-exact
+# matching are dropped from the distance formula; categorical ones are not,
+# since they are constant within an exact stratum and so contribute nothing to
+# the distance anyway.
 #
 # @return A formula string of the form "cateval_treated ~ x1 + x2 + ...".
 # @noRd
@@ -131,6 +133,36 @@
 }
 
 
+# Require a fully named list ------------------------------------------------
+#
+# modifyList() needs names to match arguments on; an unnamed element otherwise
+# fails deep inside matchit() with an opaque message.
+#
+# @noRd
+.check_named_list <- function(x, arg_name) {
+  if (length(x) > 0 && (is.null(names(x)) || any(names(x) == ""))) {
+    stop("`", arg_name, "` must be a fully named list.")
+  }
+  invisible(TRUE)
+}
+
+
+# Union a user specification with the variables cateval requires ------------
+#
+# matchit() accepts `exact` / `antiexact` as either a character vector or a
+# one-sided formula, so both are reduced to variable names before the union.
+# The caller's variables keep their original order and the required ones are
+# appended, so when nothing has been overridden the input is returned unchanged.
+#
+# @return A character vector of variable names.
+# @noRd
+.protect_vars <- function(user, forced) {
+  if (length(forced) == 0) return(user)
+  user_vars <- if (inherits(user, "formula")) all.vars(user) else as.character(user)
+  unique(c(user_vars, forced))
+}
+
+
 # Run one match -------------------------------------------------------------
 #
 # A single matching direction. The treated group is whichever group the caller
@@ -140,8 +172,13 @@
 # controlled by the caller and defaults to 1:1 nearest-neighbour Mahalanobis
 # matching with replacement.
 #
-# match_args is applied last, so it takes precedence over the named arguments
-# and can supply any other MatchIt::matchit() argument.
+# The two overlays are applied in order -- match_args (shared by both
+# directions) then match_args_dir (this direction only) -- so a direction can
+# override the shared list, which in turn overrides the named arguments. They
+# are applied in sequence against the accumulated list rather than merged with
+# each other first, because modifyList() treats NULL as removal: merging first
+# would discard a NULL in match_args_dir instead of using it to unset the
+# argument it names.
 #
 # @return A MatchIt "matchit" object.
 # @noRd
@@ -152,7 +189,10 @@
                                replace = TRUE,
                                ratio = 1,
                                std.caliper = TRUE,
-                               match_args = list()) {
+                               match_args = list(),
+                               match_args_dir = list(),
+                               forced_exact = character(0),
+                               forced_antiexact = character(0)) {
   if (!is.null(seed)) set.seed(seed)
 
   args <- list(
@@ -168,7 +208,18 @@
     std.caliper = std.caliper
   )
 
-  do.call(MatchIt::matchit, utils::modifyList(args, match_args))
+  args <- utils::modifyList(args, match_args)
+  args <- utils::modifyList(args, match_args_dir)
+
+  # These two constraints are what make a matched pair interpretable: both
+  # patients were recommended the same drug, and they took different ones. They
+  # are re-applied after the overlays so that no override can drop them. The
+  # variables involved are created inside the package and are not visible to the
+  # caller, so this is done silently.
+  args$exact     <- .protect_vars(args$exact, forced_exact)
+  args$antiexact <- .protect_vars(args$antiexact, forced_antiexact)
+
+  do.call(MatchIt::matchit, args)
 }
 
 

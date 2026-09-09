@@ -1,3 +1,47 @@
+# cateval 2.2.0
+
+All changes below are additive: every new argument defaults to the behaviour of
+the previous release, so existing code produces the same results.
+
+## Per-direction matching in `match_benefit_pairs()`
+
+* `match_args_conc` and `match_args_disc` apply `MatchIt::matchit()` arguments to
+  a single matching direction. `match_args` continues to apply to both, and the
+  direction-specific lists are layered on top of it, so the order of precedence
+  is: package defaults, then the named arguments (`method`, `distance`,
+  `replace`, `ratio`, `caliper`, `std.caliper`), then `match_args`, then that
+  direction's own list.
+* Because `utils::modifyList()` treats `NULL` as removal, a direction list can
+  also unset an argument for one direction only, e.g.
+  `match_args_disc = list(caliper = NULL)`.
+* `match_args_disc` is ignored with a warning when `symmetric = FALSE`, since
+  the discordant-as-treated direction is not run.
+* All three lists must be fully named; an unnamed element is now rejected with a
+  clear message rather than failing inside `matchit()`.
+
+## The required matching constraints can no longer be dropped
+
+* Matching is always exact on the predicted-best drug and always anti-exact on
+  the received-drug variable (and on the tolerance-set columns when
+  `conc_tolerance` is used). These are re-applied after any override, so passing
+  `exact` or `antiexact` through `match_args` now *adds* to them instead of
+  replacing them. Previously such an override silently removed the constraint
+  that makes a matched pair interpretable.
+
+## Maintenance
+
+* `pairwise_calibration()` no longer creates the intermediate `drug_1_pred` and
+  `drug_2_pred` columns, which were used once to compute `benefit` and then
+  carried unused through the matched cohort returned by `return_matched = TRUE`.
+* Removed two vestigial `requireNamespace()` guards in
+  `pairwise_calibration_pair()` for packages that are already hard dependencies.
+* `globalVariables()` gained `grouping` and `n_groups`, which are used as bare
+  column names but were undeclared, and lost `drug_1_pred` and `drug_2_pred`.
+* Corrected the comment on `.build_match_formula()`, which claimed that all
+  exact- and anti-exact-matched variables are dropped from the distance formula;
+  categorical ones are in fact retained, which is harmless because they are
+  constant within an exact stratum.
+
 # cateval 2.1.1
 
 Documentation-only fixes; no change to any function's behaviour or output.
