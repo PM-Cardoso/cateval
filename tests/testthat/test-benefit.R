@@ -38,9 +38,11 @@ test_that("benefit summaries return the expected shapes", {
 
   dec <- benefit_by_group(m$combined, cal_groups = 5)
   expect_true(all(
-    c("group", "pred.benefit", "obs.benefit", "n", "lower.ci", "upper.ci") %in% names(dec)
+    c("n_groups", "group", "pred.benefit", "obs.benefit", "n", "lower.ci", "upper.ci") %in% names(dec)
   ))
   expect_lte(nrow(dec), 5)
+  # A single cal_groups value still yields an n_groups column recording it.
+  expect_setequal(unique(dec$n_groups), 5)
 
   ov <- benefit_overall(m$combined)
   expect_equal(nrow(ov), 1L)
@@ -49,6 +51,21 @@ test_that("benefit summaries return the expected shapes", {
   cal <- benefit_citl_slope(m$combined)
   expect_equal(nrow(cal), 2L)
   expect_setequal(cal$metric, c("calibration_in_the_large", "calibration_slope"))
+})
+
+test_that("benefit_by_group accepts a vector of cal_groups and stacks all of them", {
+  d <- make_test_data()
+  m <- match_benefit_pairs(
+    d, "drugclass", "posthba1cfinal", paste0("pred.", test_drugs),
+    matching_var = test_matching_var, seed = 1
+  )
+  dec <- benefit_by_group(m$combined, cal_groups = c(3, 5))
+  expect_setequal(unique(dec$n_groups), c(3, 5))
+  # each setting groups the same pairs, so the pair counts add up to the same total
+  expect_equal(sum(dec$n[dec$n_groups == 3]), sum(dec$n[dec$n_groups == 5]))
+  # the vector call reproduces the scalar calls exactly
+  single <- benefit_by_group(m$combined, cal_groups = 3)
+  expect_equal(dec[dec$n_groups == 3, ], single, ignore_attr = TRUE)
 })
 
 test_that("benefit_by_drug groups by index_drug with the full drug list as levels", {

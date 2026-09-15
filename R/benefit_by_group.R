@@ -9,8 +9,11 @@
 #' @param pairs A matched-pairs data frame from \code{\link{match_benefit_pairs}}
 #'   (its \code{concordant}, \code{discordant} or \code{combined} element),
 #'   containing \code{pred.benefit} and \code{obs.benefit}.
-#' @param cal_groups Integer. Number of groups to split the predicted benefit
-#'   into (e.g. 10 for deciles).
+#' @param cal_groups Numeric scalar or vector. Number(s) of groups to split the
+#'   predicted benefit into (e.g. \code{10} for deciles, or \code{c(3, 5, 10)}).
+#'   Each value is summarised in turn and the results are stacked, with an
+#'   \code{n_groups} column recording which setting produced each row, as in
+#'   \code{\link{benefit_by_drug}} and \code{\link{pairwise_calibration}}.
 #' @param bootstrap Logical. If \code{FALSE} (default) the confidence interval is
 #'   the analytical t-interval of the group mean. If \code{TRUE} the interval is a
 #'   percentile bootstrap that resamples the matched pairs. The pairs are
@@ -26,8 +29,9 @@
 #'   reproducibility.
 #' @param conf Numeric. Confidence level for the interval (default 0.95).
 #'
-#' @return A data frame with one row per group:
+#' @return A data frame with one row per group and \code{cal_groups} setting:
 #' \describe{
+#'   \item{n_groups}{The \code{cal_groups} value that produced the row.}
 #'   \item{group}{Group index, ordered by increasing predicted benefit.}
 #'   \item{pred.benefit}{Mean predicted benefit in the group.}
 #'   \item{obs.benefit}{Mean observed benefit in the group.}
@@ -42,24 +46,30 @@
 #' mean observed benefit for the *same* group of patients rather than shifting
 #' the boundaries between replicates.
 #'
+#' When several \code{cal_groups} values are given, each is an independent
+#' grouping of the same pairs; a plot should show one setting at a time (for
+#' example the largest number of groups for which every group still has enough
+#' pairs), which is why \code{n_groups} is returned alongside \code{group}.
+#'
 #' @seealso \code{\link{match_benefit_pairs}}, \code{\link{benefit_by_drug}}
 #'
 #' @examples
 #' \dontrun{
 #' benefit_by_group(matched$combined, cal_groups = 10)
+#' benefit_by_group(matched$combined, cal_groups = c(3, 5, 10))
 #' benefit_by_group(matched$combined, cal_groups = 10, bootstrap = TRUE, boot_seed = 42)
 #' }
 #'
-#' @importFrom dplyr group_by summarise mutate n
+#' @importFrom dplyr group_by summarise mutate n bind_rows select
 #' @importFrom stats quantile sd qt
 #' @importFrom boot boot
 #' @export
 benefit_by_group <- function(pairs,
-                            cal_groups = 10,
-                            bootstrap = FALSE,
-                            n_boot = 1000,
-                            boot_seed = NULL,
-                            conf = 0.95) {
+                             cal_groups = 10,
+                             bootstrap = FALSE,
+                             n_boot = 1000,
+                             boot_seed = NULL,
+                             conf = 0.95) {
 
   `%>%` <- dplyr::`%>%`
 
@@ -67,9 +77,36 @@ benefit_by_group <- function(pairs,
   if (!all(c("pred.benefit", "obs.benefit") %in% colnames(pairs))) {
     stop("`pairs` must contain `pred.benefit` and `obs.benefit` (use match_benefit_pairs()).")
   }
-  if (!is.numeric(cal_groups) || length(cal_groups) != 1 || cal_groups < 1) {
-    stop("`cal_groups` must be a single positive number.")
+  if (!is.numeric(cal_groups) || length(cal_groups) < 1 || any(cal_groups < 1)) {
+    stop("`cal_groups` must be one or more positive numbers.")
   }
+
+  # Summarise each requested number of groups in turn and stack the results;
+  # n_groups records which setting produced each row.
+  result <- NULL
+  for (cg in cal_groups) {
+    one <- .benefit_by_group_one(
+      pairs = pairs,
+      cal_groups = cg,
+      bootstrap = bootstrap,
+      n_boot = n_boot,
+      boot_seed = boot_seed,
+      conf = conf
+    )
+    one$n_groups <- cg
+    result <- dplyr::bind_rows(result, one)
+  }
+
+  result %>%
+    dplyr::select(n_groups, group, pred.benefit, obs.benefit, n, lower.ci, upper.ci)
+}
+
+
+# Summarise the matched pairs for a single number of groups. Called once per
+# cal_groups value by benefit_by_group().
+.benefit_by_group_one <- function(pairs, cal_groups, bootstrap, n_boot, boot_seed, conf) {
+
+  `%>%` <- dplyr::`%>%`
 
   alpha <- (1 - conf) / 2
 

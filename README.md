@@ -136,7 +136,8 @@ matched <- match_benefit_pairs(
   seed         = 19840503
 )
 
-# 2. summarise (set bootstrap = TRUE for pair-level bootstrap intervals)
+# 2. summarise (set bootstrap = TRUE for pair-level bootstrap intervals);
+# cal_groups can be a vector, e.g. c(3, 5, 10), stacked with an n_groups column
 by_group <- benefit_by_group(matched$combined, cal_groups = 10)
 overall  <- benefit_overall(matched$combined)
 slope    <- benefit_citl_slope(matched$combined)

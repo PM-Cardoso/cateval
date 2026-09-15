@@ -18,8 +18,11 @@ benefit_by_group(
 (its \code{concordant}, \code{discordant} or \code{combined} element),
 containing \code{pred.benefit} and \code{obs.benefit}.}
 
-\item{cal_groups}{Integer. Number of groups to split the predicted benefit
-into (e.g. 10 for deciles).}
+\item{cal_groups}{Numeric scalar or vector. Number(s) of groups to split the
+predicted benefit into (e.g. \code{10} for deciles, or \code{c(3, 5, 10)}).
+Each value is summarised in turn and the results are stacked, with an
+\code{n_groups} column recording which setting produced each row, as in
+\code{\link{benefit_by_drug}} and \code{\link{pairwise_calibration}}.}
 
 \item{bootstrap}{Logical. If \code{FALSE} (default) the confidence interval is
 the analytical t-interval of the group mean. If \code{TRUE} the interval is a
@@ -40,8 +43,9 @@ reproducibility.}
 \item{conf}{Numeric. Confidence level for the interval (default 0.95).}
 }
 \value{
-A data frame with one row per group:
+A data frame with one row per group and \code{cal_groups} setting:
 \describe{
+\item{n_groups}{The \code{cal_groups} value that produced the row.}
 \item{group}{Group index, ordered by increasing predicted benefit.}
 \item{pred.benefit}{Mean predicted benefit in the group.}
 \item{obs.benefit}{Mean observed benefit in the group.}
@@ -62,10 +66,16 @@ The group boundaries are fixed from the predicted benefit of \code{pairs}
 before any bootstrapping, so that each bootstrap replicate re-estimates the
 mean observed benefit for the \emph{same} group of patients rather than shifting
 the boundaries between replicates.
+
+When several \code{cal_groups} values are given, each is an independent
+grouping of the same pairs; a plot should show one setting at a time (for
+example the largest number of groups for which every group still has enough
+pairs), which is why \code{n_groups} is returned alongside \code{group}.
 }
 \examples{
 \dontrun{
 benefit_by_group(matched$combined, cal_groups = 10)
+benefit_by_group(matched$combined, cal_groups = c(3, 5, 10))
 benefit_by_group(matched$combined, cal_groups = 10, bootstrap = TRUE, boot_seed = 42)
 }
 

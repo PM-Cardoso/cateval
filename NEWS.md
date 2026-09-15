@@ -1,3 +1,18 @@
+# cateval 2.3.0
+
+## Multiple `cal_groups` in `benefit_by_group()`
+
+* `benefit_by_group()` now accepts a vector of `cal_groups` (e.g. `c(3, 5, 10)`),
+  as `benefit_by_drug()` and `pairwise_calibration()` already did. Each value is
+  summarised in turn on the same matched pairs and the results are stacked.
+* The output gains an `n_groups` column (first column) recording which
+  `cal_groups` value produced each row, matching `benefit_by_drug()`. This is the
+  one visible change for existing code: a scalar `cal_groups` returns the same
+  rows and values as before, plus this column.
+* Internally the single-setting summary moved to an unexported worker
+  (`.benefit_by_group_one()`); `benefit_by_drug()` is unchanged and continues
+  to call `benefit_by_group()` once per setting and drug.
+
 # cateval 2.2.0
 
 All changes below are additive: every new argument defaults to the behaviour of
