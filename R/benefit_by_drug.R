@@ -28,7 +28,8 @@
 #'   drug class and each requested \code{cal_groups} value, with an
 #'   \code{index_drug} column identifying the drug class that anchors each group
 #'   and an \code{n_groups} column giving the number of calibration groups used.
-#'   Suitable for faceting.
+#'   Suitable for faceting. Small or empty groups are handled as in
+#'   \code{\link{benefit_by_group}}, with warnings naming the drug class.
 #'
 #' @seealso \code{\link{benefit_by_group}}, \code{\link{match_benefit_pairs}}
 #'
@@ -85,13 +86,21 @@ benefit_by_drug <- function(pairs,
     for (drug in drugs_with_pairs) {
       drug_pairs <- dplyr::filter(pairs, index_drug == drug)
 
-      drug_deciles <- benefit_by_group(
-        pairs = drug_pairs,
-        cal_groups = cg,
-        bootstrap = bootstrap,
-        n_boot = n_boot,
-        boot_seed = boot_seed,
-        conf = conf
+      # Warnings from benefit_by_group() (ties, small or empty groups) are
+      # re-issued naming the drug class they refer to.
+      drug_deciles <- withCallingHandlers(
+        benefit_by_group(
+          pairs = drug_pairs,
+          cal_groups = cg,
+          bootstrap = bootstrap,
+          n_boot = n_boot,
+          boot_seed = boot_seed,
+          conf = conf
+        ),
+        warning = function(w) {
+          warning("index_drug = ", drug, ": ", conditionMessage(w), call. = FALSE)
+          invokeRestart("muffleWarning")
+        }
       )
       drug_deciles$index_drug <- drug
       drug_deciles$n_groups <- cg

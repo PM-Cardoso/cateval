@@ -35,9 +35,11 @@
 #'   \item{group}{Group index, ordered by increasing predicted benefit.}
 #'   \item{pred.benefit}{Mean predicted benefit in the group.}
 #'   \item{obs.benefit}{Mean observed benefit in the group.}
-#'   \item{n}{Number of matched pairs in the group.}
+#'   \item{n}{Number of matched pairs in the group with an observed benefit
+#'     (pairs whose \code{obs.benefit} is missing are not counted, since they do
+#'     not contribute to the mean or its interval).}
 #'   \item{lower.ci, upper.ci}{Confidence-interval bounds for the mean observed
-#'     benefit.}
+#'     benefit. \code{NA} for a group with fewer than two pairs (see Details).}
 #' }
 #'
 #' @details
@@ -45,6 +47,15 @@
 #' before any bootstrapping, so that each bootstrap replicate re-estimates the
 #' mean observed benefit for the *same* group of patients rather than shifting
 #' the boundaries between replicates.
+#'
+#' \strong{Small groups.} A confidence interval needs at least two pairs with
+#' an observed benefit. For a group with fewer, the mean is still reported but
+#' \code{lower.ci} and \code{upper.ci} are \code{NA} (for both the analytical
+#' and the bootstrap interval, since a bootstrap of a single pair collapses to a
+#' point). Groups that receive no pairs at all, which can happen with few pairs
+#' or heavily tied predictions, are omitted from the output. Both cases are
+#' reported in a single warning per \code{cal_groups} value. Reducing
+#' \code{cal_groups} avoids them.
 #'
 #' When several \code{cal_groups} values are given, each is an independent
 #' grouping of the same pairs; a plot should show one setting at a time (for
@@ -131,15 +142,42 @@ benefit_by_group <- function(pairs,
   # ---- Point estimates per group ----
   # Note: `sd` is taken before `obs.benefit` is overwritten by its group mean,
   # because summarise() evaluates its arguments in order.
+  # `n` counts pairs with an observed benefit, which is the sample size behind
+  # the group mean and its interval.
   summary_tbl <- pairs %>%
     dplyr::group_by(group) %>%
     dplyr::summarise(
       pred.benefit = mean(pred.benefit, na.rm = TRUE),
       sd = stats::sd(obs.benefit, na.rm = TRUE),
-      n = dplyr::n(),
+      n = sum(!is.na(obs.benefit)),
       obs.benefit = mean(obs.benefit, na.rm = TRUE),
       .groups = "drop"
-    )
+    ) %>%
+    dplyr::filter(!is.na(group))
+
+  # ---- Groups too small for an interval ----
+  # Fewer than two pairs: no spread to estimate (analytical), or a degenerate
+  # point (bootstrap). Empty groups never appear in summary_tbl.
+  too_small <- summary_tbl$n < 2
+  empty_groups <- setdiff(seq_len(n_groups), summary_tbl$group)
+  if (any(too_small) || length(empty_groups) > 0) {
+    msg <- character(0)
+    if (any(too_small)) {
+      msg <- c(msg, paste0(
+        "group(s) ", paste(summary_tbl$group[too_small], collapse = ", "),
+        " have fewer than 2 pairs with an observed benefit, so no confidence ",
+        "interval can be computed (lower.ci / upper.ci set to NA)"
+      ))
+    }
+    if (length(empty_groups) > 0) {
+      msg <- c(msg, paste0(
+        "group(s) ", paste(empty_groups, collapse = ", "),
+        " contain no pairs and are omitted"
+      ))
+    }
+    warning("cal_groups = ", cal_groups, ": ", paste(msg, collapse = "; "),
+            ". Consider fewer groups.", call. = FALSE)
+  }
 
   if (isTRUE(bootstrap)) {
 
@@ -155,15 +193,21 @@ benefit_by_group <- function(pairs,
 
     summary_tbl$lower.ci <- ci_mat[1, summary_tbl$group]
     summary_tbl$upper.ci <- ci_mat[2, summary_tbl$group]
+    summary_tbl$lower.ci[too_small] <- NA_real_
+    summary_tbl$upper.ci[too_small] <- NA_real_
 
   } else {
 
     # Analytical t-interval of the group mean.
+    # Computed only where n >= 2, so qt() is never asked for zero degrees of
+    # freedom.
+    t_crit <- rep(NA_real_, nrow(summary_tbl))
+    t_crit[!too_small] <- stats::qt(1 - alpha, summary_tbl$n[!too_small] - 1)
     summary_tbl <- summary_tbl %>%
       dplyr::mutate(
         se = sd / sqrt(n),
-        lower.ci = obs.benefit - stats::qt(1 - alpha, n - 1) * se,
-        upper.ci = obs.benefit + stats::qt(1 - alpha, n - 1) * se
+        lower.ci = obs.benefit - t_crit * se,
+        upper.ci = obs.benefit + t_crit * se
       )
   }
 

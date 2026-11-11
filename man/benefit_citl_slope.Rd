@@ -32,7 +32,10 @@ a control patient across pairs (matching with replacement).}
 \value{
 A data frame with one row per metric and columns \code{metric}
 (\code{calibration_in_the_large} or \code{calibration_slope}),
-\code{estimate}, \code{lower.ci} and \code{upper.ci}.
+\code{estimate}, \code{lower.ci} and \code{upper.ci}. The intervals need
+at least three complete pairs (one residual degree of freedom); with fewer,
+or when every pair has the same predicted benefit, they are \code{NA} with a
+warning.
 }
 \description{
 Regresses observed benefit on predicted benefit across the matched pairs and

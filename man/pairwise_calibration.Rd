@@ -36,10 +36,14 @@ pairwise_calibration(
 
 \item{drug_var}{Character string specifying the column name of the treatment variable (e.g., assigned drug).}
 
-\item{drugs}{Character vector of two or more drug names to be compared pairwise.}
+\item{drugs}{Vector of two or more drug names to be compared pairwise,
+matching the values in \code{drug_var} (text, factor levels or numeric codes).
+Pairs are formed in the order given, and the first drug of each pair is
+\code{drug1} in the output.}
 
 \item{prediction_vars}{Character vector of column names corresponding to predicted outcomes for each drug.
-Must be the same length and order as \code{drugs}.}
+Must be the same length and order as \code{drugs}: \code{prediction_vars[i]} holds
+the predictions for \code{drugs[i]}, so the columns may follow any naming scheme.}
 
 \item{outcome_var}{Character string specifying the column name of the observed outcome variable.}
 
@@ -48,13 +52,13 @@ the population for subgroup analysis.}
 
 \item{matching}{Logical; if \code{TRUE}, performs covariate matching using the \code{MatchIt} package before estimating effects.}
 
-\item{adjustment_var}{Optional character vector of covariate column names to adjust for in regression models.}
+\item{adjustment_var}{Optional character vector of covariate column names to adjust for in regression models. Must not include \code{drug_var} or \code{outcome_var}.}
 
-\item{matching_var}{Optional character vector specifying variables to match on. Defaults to \code{adjustment_var} if NULL.}
+\item{matching_var}{Optional character vector specifying variables to match on. Defaults to \code{adjustment_var} if NULL. Must not include \code{drug_var} or \code{outcome_var}.}
 
-\item{match.exact}{Optional character vector of variables for exact matching.}
+\item{match.exact}{Optional character vector of variables for exact matching. Must not include \code{drug_var}.}
 
-\item{match.antiexact}{Optional character vector of variables for anti-exact matching.}
+\item{match.antiexact}{Optional character vector of additional variables for anti-exact matching. The received drug is always anti-exact.}
 
 \item{caliper}{Optional named numeric vector passed to \code{MatchIt::matchit}
 (e.g. \code{c(prehba1c = 0.4)}); interpreted in standard-deviation units by
@@ -76,11 +80,14 @@ that the matched cohorts can be reproduced exactly.}
 one matched set (default \code{TRUE}).}
 
 \item{ratio}{Numeric. Number of controls matched to each treated patient
-(default \code{1}).}
+(default \code{1}). See \code{\link{pairwise_calibration_pair}} for how
+matched sets with several controls are weighted.}
 
 \item{match_args}{Optional named list of further arguments for
-\code{MatchIt::matchit}. Applied last, so it overrides the arguments above
-and gives access to any matching option not exposed here.}
+\code{MatchIt::matchit}. Applied after the arguments above, so it
+overrides them and gives access to any matching option not exposed here.
+The anti-exact constraint on the received drug is re-applied afterwards and
+cannot be removed.}
 
 \item{return_matched}{Logical. If \code{TRUE}, return a list that also
 contains the matched cohort and \code{matchit} object for each drug pair,
@@ -102,8 +109,8 @@ reproducibility.}
 By default, a data.frame with one row per calibration group and drug pair combination, including:
 \describe{
 \item{mean}{Mean predicted benefit in the calibration group.}
-\item{coef}{Estimated treatment effect (regression coefficient) within the group.}
-\item{coef_low}{Lower bound of the confidence interval for the estimate.}
+\item{coef}{Estimated treatment effect (regression coefficient) within the group: the observed outcome on drug1 relative to drug2. \code{NA} when the group does not contain patients on both drugs.}
+\item{coef_low}{Lower bound of the confidence interval for the estimate. \code{NA} when it cannot be estimated (too few patients in the group).}
 \item{coef_high}{Upper bound of the confidence interval.}
 \item{n_groups}{Number of calibration groups used for this stratification (the \code{cal_groups} value that produced the row).}
 \item{drug1}{Name of the first drug in the pair.}
@@ -126,6 +133,14 @@ and estimates treatment effects within each group.
 \details{
 Internally, the function calls \code{pairwise_calibration_pair()} for each drug pair to obtain
 subgroup treatment effect estimates and confidence intervals.
+
+For a pair (drug1, drug2) taken in the order given in \code{drugs}, the predicted
+benefit is the predicted outcome on drug1 minus that on drug2, so a negative
+value means drug1 is predicted to be better (lower outcome). When
+\code{matching = TRUE}, patients predicted to do better on drug1 are matched to
+patients predicted to do better on drug2, always requiring the matched
+patients to have received different drugs; see
+\code{\link{pairwise_calibration_pair}} for the details.
 }
 \examples{
 \dontrun{

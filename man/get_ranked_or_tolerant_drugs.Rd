@@ -9,7 +9,8 @@ get_ranked_or_tolerant_drugs(
   rank = 1,
   column_names = NULL,
   prediction_column = NULL,
-  tolerance = NULL
+  tolerance = NULL,
+  drugs = NULL
 )
 }
 \arguments{
@@ -19,9 +20,19 @@ get_ranked_or_tolerant_drugs(
 
 \item{column_names}{Character vector. Names of the columns containing predicted values.}
 
-\item{prediction_column}{Character string. Common prefix used in prediction column names (e.g., "pred_").}
+\item{prediction_column}{Character string. Text to remove from each name in
+\code{column_names} to recover the drug name (e.g. \code{"pred_"} turns \code{"pred_A"}
+into \code{"A"}). It is removed literally (not as a regular expression) and only
+once per name, so it may sit anywhere in the name, e.g. a suffix such as
+\code{"_pred"}. Ignored when \code{drugs} is supplied.}
 
 \item{tolerance}{Optional numeric. If provided, return all drugs within this margin above the best predicted value.}
+
+\item{drugs}{Optional vector of drug names (character, factor or numeric
+codes), one per element of \code{column_names} and in the same order. Use this when the drug name cannot be
+recovered by removing a single piece of text from the column names (for
+example \code{c("hba1c_sglt2_m12", "hba1c_glp1_m12")}). Drug names must not
+contain commas, since the tolerance output is comma-separated.}
 }
 \value{
 A character vector with two named elements:
@@ -43,6 +54,11 @@ get_ranked_or_tolerant_drugs(
 get_ranked_or_tolerant_drugs(
   row,
   tolerance = 0.05, column_names = names(row), prediction_column = "pred_"
+)
+# drug names given directly, whatever the column naming scheme
+get_ranked_or_tolerant_drugs(
+  row,
+  rank = 1, column_names = names(row), drugs = c("A", "B", "C")
 )
 }
 }

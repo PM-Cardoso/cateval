@@ -77,6 +77,47 @@ received drug — this is what makes a matched pair interpretable as "followed t
 model vs did not". Supplying `exact` or `antiexact` through `match_args` adds to
 those constraints rather than replacing them.
 
+In `pairwise_calibration()`, patients predicted to do better on the first drug of
+a pair are matched to patients predicted to do better on the second, and the
+match is likewise always anti-exact on the received drug, so every matched set
+compares patients who took different drugs. The same layering applies (named
+arguments, then `match_args`, then the protected constraint), and all matching
+arguments refer to columns by their original names.
+
+In both workflows `drug_var` and `outcome_var` cannot be used as matching or
+adjustment variables, and only pair-matching methods (`"nearest"`, `"optimal"`,
+`"genetic"`) are supported, since each treated patient must be linked to its own
+control(s). With `ratio > 1` a treated patient contributes one row per matched
+control, all weighted equally — see `?match_benefit_pairs`.
+
+### Prediction columns and drug names
+
+`cateval` makes no assumption about what the treatments are called — drug
+classes, molecules, trial arms or numeric codes all work, as long as the
+received-treatment column and the prediction columns refer to the same set.
+Each prediction column is linked to a treatment name as it appears in
+`drug_var`:
+
+- `pairwise_calibration()` takes them by position (`drugs[i]` ↔
+  `prediction_vars[i]`), so any column names work.
+- `match_benefit_pairs()` infers the link from the treatments observed in
+  `drug_var`: any prefix (`pred.A`, `yhat_outcome_A`) or suffix (`A_pred`)
+  works, upper/lower-case differences are tolerated, and a treatment that no
+  patient received is read from the naming pattern of the other columns. For
+  anything else, say it directly:
+
+``` r
+match_benefit_pairs(
+  ...,
+  pred_cols = c("score_a", "score_b", "score_c"),
+  drugs     = c("Drug A", "Drug B", "Drug C")     # or a named pred_cols vector
+)
+```
+
+The mapping used is returned in the `drugs` element of the result (and printed
+whenever it had to be inferred indirectly). Names may contain spaces, hyphens,
+dots, brackets or non-ASCII characters, but not commas.
+
 ### Predicted-best drug utilities
 
 - **`get_best_drugs()`** — Identify the recommended drug (or the near-best set) for each patient
@@ -151,11 +192,12 @@ ggplot(by_group, aes(x = pred.benefit, y = obs.benefit)) +
   geom_errorbar(aes(ymin = lower.ci, ymax = upper.ci), width = 0.2) +
   geom_point(size = 2.5)
 
-# Identify the predicted-optimal treatment(s) for each patient
+# Identify the predicted-optimal treatment(s) for each patient: every drug
+# within 3 units of the best prediction
 best_drugs <- get_best_drugs(
-  data         = your_data,
-  rank         = 1,
-  column_names = paste0("pred.", drugs),
+  data           = your_data,
+  tolerance      = 3,
+  column_names   = paste0("pred.", drugs),
   final_var_name = "pred."
 )
 

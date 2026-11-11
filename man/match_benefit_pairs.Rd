@@ -23,7 +23,8 @@ match_benefit_pairs(
   match_args_disc = list(),
   conc_tolerance = NULL,
   symmetric = TRUE,
-  seed = NULL
+  seed = NULL,
+  drugs = NULL
 )
 }
 \arguments{
@@ -38,10 +39,16 @@ received.}
 12-month HbA1c). Benefits are computed on this absolute scale.}
 
 \item{pred_cols}{Character vector. Names of the predicted-outcome columns, one
-per drug, sharing a common prefix (e.g. \code{c("pred.SGLT2", "pred.GLP1")}).}
+per drug (e.g. \code{c("pred.SGLT2", "pred.GLP1")}). Lower predicted values
+are taken to be better. Any naming scheme can be used; see \code{drugs} and
+the \emph{Drug names} section for how each column is linked to a drug. The
+vector may also be named by drug, e.g.
+\code{c(SGLT2 = "yhat_sglt2", GLP1 = "yhat_glp1")}.}
 
 \item{matching_var}{Character vector. Covariates used for Mahalanobis distance
-matching.}
+matching. Must not include \code{drug_var} or \code{outcome_var}. Patients
+with a missing value in any \code{matching_var}, \code{match.exact} or
+\code{match.antiexact} variable are excluded before matching.}
 
 \item{match.exact}{Optional character vector. Additional variables to match on
 exactly. The predicted-best drug is always included.}
@@ -66,7 +73,8 @@ in standard-deviation units; if \code{FALSE}, in the variable's own units.}
 one pair (default \code{TRUE}). See the note on confidence intervals below.}
 
 \item{ratio}{Numeric. Number of controls matched to each treated patient
-(default \code{1}).}
+(default \code{1}). With \code{ratio > 1} each treated patient contributes
+one pair per matched control; see \emph{Matching more than one control}.}
 
 \item{match_args}{Optional named list of further arguments for
 \code{MatchIt::matchit}, applied to both matching directions. Overrides the
@@ -90,6 +98,11 @@ only the concordant-as-treated direction is run.}
 
 \item{seed}{Optional integer. Seed set before each matching call so the result
 is reproducible.}
+
+\item{drugs}{Optional vector of drug names (character, factor or numeric
+codes), one per element of \code{pred_cols} and in the same order, matching
+the values in \code{drug_var}. Takes precedence over the names of \code{pred_cols}. If
+neither is given, the drug names are inferred (see \emph{Drug names}).}
 }
 \value{
 An object of class \code{cateval_benefit_match}: a list with elements
@@ -101,8 +114,11 @@ An object of class \code{cateval_benefit_match}: a list with elements
 pairs removed.}
 \item{matchit}{A list of the underlying \code{matchit} objects
 (\code{$concordant} and \code{$discordant}) for balance / love plots.}
+\item{drugs}{Named character vector linking each prediction column (names)
+to the drug it was taken to refer to (values), so the mapping can be
+checked.}
 }
-Each pairs data frame has one row per matched pair, including
+Each pairs data frame has one row per treated-control pair, including
 \code{concordant_drug}, \code{discordant_drug}, \code{index_drug} (the drug
 received by the index/treated patient of the pair), \code{pred.benefit},
 \code{obs.benefit} and the retained matching covariates.
@@ -128,12 +144,19 @@ directions counted once.
 }
 
 The predicted and observed benefits are computed on the scale of
-\code{outcome_var} (i.e. absolute outcomes): for each pair, \code{pred.benefit}
-is the concordant patient's predicted outcome on the discordant drug minus the
-predicted outcome on their own (recommended) drug, and \code{obs.benefit} is
-the observed outcome of the discordant patient minus that of the concordant
-patient. Both are positive when the model's recommended drug is expected to,
-and does, give the better outcome.
+\code{outcome_var} (i.e. absolute outcomes). Each pair has an \emph{index}
+patient -- the treated patient of the matching direction it came from -- and
+\code{pred.benefit} is computed from that patient's predictions: their
+predicted outcome on the discordant patient's drug minus their predicted
+outcome on the concordant patient's (recommended) drug. In the
+concordant-as-treated direction the index patient is the concordant patient;
+in the discordant-as-treated direction it is the discordant patient. Because
+both patients of a pair share the same predicted-best drug (exact matching),
+either way it is the predicted advantage of the recommended drug over the
+alternative for the index patient. \code{obs.benefit} is the observed outcome
+of the discordant patient minus that of the concordant patient. Both are
+positive when the model's recommended drug is expected to, and does, give the
+better (lower) outcome.
 
 The matched pairs frames are the input to \code{\link{benefit_by_group}},
 \code{\link{benefit_overall}}, \code{\link{benefit_citl_slope}} and
@@ -154,12 +177,57 @@ predicted-best drug and always anti-exact on \code{drug_var} (and on the
 tolerance-set columns when \code{conc_tolerance} is used). These are
 re-applied after every override, so supplying \code{exact} or
 \code{antiexact} through \code{match_args} adds to them rather than replacing
-them.
+them. For the same reason \code{drug_var} cannot be used in
+\code{match.exact}, and neither \code{drug_var} nor \code{outcome_var} can be
+a matching variable. Only pair-matching methods (e.g. \code{"nearest"},
+\code{"optimal"}, \code{"genetic"}) can be used, since each treated patient
+must be linked to its own control(s).
+
+\strong{Drug names.} The package makes no assumption about what the drugs
+are called: they can be drug classes, molecules, trial arms or numeric
+codes, as long as \code{drug_var} and the prediction columns refer to the
+same set. Each column in \code{pred_cols} must be linked to the drug name
+used in \code{drug_var}. This is taken from \code{drugs} if supplied,
+otherwise from the names of \code{pred_cols}. Failing both, it is inferred
+from the drugs observed in \code{drug_var}:
+\enumerate{
+\item each column is assigned the drug its name ends with, so any prefix
+works (\code{"pred.A"}, \code{"yhat_outcome_A"}); if that does not give
+a unique drug for every column, the drug its name starts with
+(\code{"A_pred"}). Where several drugs fit, the longest is taken, so
+\code{"pred.BA"} is \code{BA} rather than \code{A};
+\item failing that, the same matching ignoring upper/lower case
+(\code{"pred.drug_a"} for \code{"Drug_A"}), keeping the spelling in
+\code{drug_var};
+\item a drug that has a prediction column but that no patient received
+cannot be found in \code{drug_var}; if the other columns all follow one
+pattern (e.g. \code{"pred.<drug>"}), its name is read from its column
+with that pattern.
+}
+Steps 2 and 3 print the mapping they used. If none of these gives an
+unambiguous answer, an error asks for \code{drugs}. The mapping used is
+always returned in the \code{drugs} element. Patients who received a drug
+with no prediction column, or whose received drug is missing, cannot be
+labelled or paired and are excluded with a warning.
+
+\strong{Matching more than one control (\code{ratio > 1}).} Each treated
+patient is paired with every control matched to it, so it contributes up to
+\code{ratio} rows that share the same treated patient. The summary
+functions weight every row equally; MatchIt's matching weights are not used.
+With a fixed ratio and every treated patient receiving its full set of
+controls, each treated patient therefore carries the same weight. When some
+receive fewer controls -- because of a caliper, a shortage of controls when
+\code{replace = FALSE}, or a variable ratio set through \code{match_args}
+-- those patients carry proportionally less weight. Rows that share a
+treated patient are also not independent; see the note on confidence
+intervals below.
 
 \strong{Limitation (confidence intervals under matching with replacement).}
 Matching is done with replacement by default (\code{replace = TRUE}), so a
 single control patient can appear in
-several matched pairs, which makes pairs that share a control not independent.
+several matched pairs, which makes pairs that share a control not independent
+(as are pairs that share a treated patient when \code{ratio > 1}, and pairs
+that share a patient across the two directions in \code{combined}).
 The confidence intervals from the summary functions -- both the analytical
 interval and the optional pair-level bootstrap -- treat matched pairs as
 independent, and so they do not widen to reflect this dependence. They are
@@ -202,6 +270,17 @@ matched2 <- match_benefit_pairs(
   match_args_disc = list(replace = FALSE, ratio = 2),
   seed = 19840503
 )
+
+# prediction columns with a different naming scheme: name them by drug
+matched3 <- match_benefit_pairs(
+  data = analysis_dataset,
+  drug_var = "drugclass",
+  outcome_var = "posthba1cfinal",
+  pred_cols = c(SGLT2 = "hba1c_sglt2_m12", GLP1 = "hba1c_glp1_m12",
+                DPP4 = "hba1c_dpp4_m12"),
+  matching_var = c("agetx", "prebmi", "prehba1c", "sex")
+)
+matched3$drugs
 }
 
 }

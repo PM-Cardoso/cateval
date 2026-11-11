@@ -20,7 +20,10 @@
 #'
 #' @return A data frame with one row per metric and columns \code{metric}
 #'   (\code{calibration_in_the_large} or \code{calibration_slope}),
-#'   \code{estimate}, \code{lower.ci} and \code{upper.ci}.
+#'   \code{estimate}, \code{lower.ci} and \code{upper.ci}. The intervals need
+#'   at least three complete pairs (one residual degree of freedom); with fewer,
+#'   or when every pair has the same predicted benefit, they are \code{NA} with a
+#'   warning.
 #'
 #' @seealso \code{\link{match_benefit_pairs}}, \code{\link{benefit_by_group}}
 #'
@@ -47,7 +50,13 @@ benefit_citl_slope <- function(pairs,
   fit <- stats::lm(obs.benefit ~ pred.benefit, data = pairs)
   estimate <- as.numeric(stats::coef(fit))
 
-  if (isTRUE(bootstrap)) {
+  # A line through two points (or a constant predictor) leaves nothing to
+  # estimate the residual variance from.
+  if (fit$df.residual < 1 || anyNA(estimate)) {
+    warning("Too few complete pairs (n = ", stats::nobs(fit), ") or no variation in ",
+            "`pred.benefit`; confidence intervals cannot be computed.", call. = FALSE)
+    lower <- upper <- c(NA_real_, NA_real_)
+  } else if (isTRUE(bootstrap)) {
     if (!is.null(boot_seed)) set.seed(boot_seed)
     stat_fn <- function(d, idx) stats::coef(stats::lm(obs.benefit ~ pred.benefit, data = d[idx, ]))
     bt <- boot::boot(pairs[, c("obs.benefit", "pred.benefit")], statistic = stat_fn, R = n_boot)

@@ -1,3 +1,109 @@
+# cateval 2.4.0
+
+## Pairwise matching is always anti-exact on the received drug (behaviour change)
+
+* In `pairwise_calibration()` / `pairwise_calibration_pair()` with
+  `matching = TRUE`, patients predicted to do better on the first drug are still
+  matched to patients predicted to do better on the second, but the match is now
+  always anti-exact on the received drug, so every matched set compares patients
+  who took different drugs. This is the same requirement as in
+  `match_benefit_pairs()`, and it is protected in the same way: it is re-applied
+  after `match_args`, so `match_args = list(antiexact = NULL)` cannot remove it
+  and an `antiexact` entry adds to it. **Matched pairwise results therefore
+  differ from 2.3.0.** Unmatched results (`matching = FALSE`) are unchanged.
+* Matching arguments (`matching_var`, `match.exact`, `match.antiexact`,
+  `caliper`, `match_args`) can now refer to any column, including `drug_var`,
+  by its original name. The working columns are added as copies instead of
+  renaming the originals; the matched cohort returned with
+  `return_matched = TRUE` keeps the original columns as well as
+  `dataset_drug_var`, `dataset_outcome_var` and `dataset_benefit`.
+* A drug pair for which no matches can be formed (e.g. a very tight caliper) now
+  gives a warning and no rows for that pair, instead of stopping the whole
+  `pairwise_calibration()` run.
+
+## Prediction columns and drug names of any kind
+
+The package makes no assumption about what the treatments are called (drug
+classes, molecules, trial arms, numeric codes, ...). This release makes that
+hold throughout.
+
+* `match_benefit_pairs()` no longer derives drug names by stripping the longest
+  common prefix of `pred_cols`. That prefix could run into the drug names: for
+  `c("pred.SGLT2", "pred.SU")` it was `"pred.S"`, giving drugs `GLT2` and `U`, no
+  concordant patients and an opaque MatchIt error. Drug names are now matched
+  against the values observed in `drug_var`:
+  * any prefix (`"pred.A"`, `"yhat_outcome_A"`) or suffix (`"A_pred"`); where
+    several names fit, the longest is taken (`"pred.BA"` is `BA`, not `A`);
+  * failing that, ignoring upper/lower case, keeping the spelling in `drug_var`
+    (not used when two observed names differ by case alone);
+  * a drug that has a prediction column but that nobody received is read from
+    the naming pattern shared by the other columns.
+  The last two routes print the mapping they used. Otherwise the new `drugs`
+  argument, or a named `pred_cols` vector, sets the mapping explicitly, and the
+  mapping used is always returned in the new `drugs` element of the result. For
+  the usual `pred.<drug>` columns the matched pairs are identical to 2.3.0.
+* Numeric drug codes now work in `pairwise_calibration()`. Previously the code
+  was used as a position when looking up the prediction column (drug `10` looked
+  for the 10th column), giving "subscript out of bounds" or the wrong column.
+* `drugs` arguments accept character, factor or numeric values.
+* Patients whose received drug has no prediction column (or is missing) are now
+  excluded with a warning; previously they were matched and produced pairs with
+  a missing `pred.benefit`.
+* Drug names containing spaces, hyphens, dots, brackets or other
+  regular-expression characters (e.g. `"GLP-1 RA"`) now work with
+  `conc_tolerance`; set membership was previously tested with a word-boundary
+  regular expression.
+* `get_best_drugs()` and `get_ranked_or_tolerant_drugs()` gain a `drugs`
+  argument (drug name per column, by position), and remove `final_var_name` /
+  `prediction_column` from column names literally rather than as a regular
+  expression (so the `.` in `"pred."` no longer matches any character).
+
+## Small calibration groups
+
+* `benefit_by_group()` and `benefit_by_drug()`: a group with fewer than two
+  pairs now gets `NA` confidence bounds (analytical and bootstrap) with one
+  clear warning per `cal_groups` value, instead of `NaN` bounds and a warning
+  from `qt()`. Groups that receive no pairs are now reported in the same warning
+  (they were silently missing). `benefit_by_drug()` prefixes these warnings with
+  the drug class.
+* `n` in `benefit_by_group()` now counts pairs with an observed benefit, which is
+  the sample size the mean and its interval are based on (consistent with
+  `benefit_overall()`). It only differs from before when `obs.benefit` has
+  missing values.
+* `benefit_overall()` (fewer than two pairs) and `benefit_citl_slope()` (fewer
+  than three complete pairs, or constant `pred.benefit`) return `NA` intervals
+  with a warning instead of `NaN`.
+* `pairwise_calibration_pair()`: a group whose outcome model has no residual
+  degrees of freedom keeps its point estimate but gets `NA` Wald bounds, with a
+  warning naming the group.
+
+## Documentation
+
+* `match_benefit_pairs()`: `pred.benefit` is computed from the *index* (treated)
+  patient's predictions — the concordant patient in the concordant-as-treated
+  direction and the discordant patient in the discordant-as-treated direction.
+  The documentation previously said it always used the concordant patient's
+  predictions; the computation itself is unchanged.
+* `match_benefit_pairs()`: new section on `ratio > 1`. Each treated patient is
+  paired with each of its controls, so it contributes up to `ratio` rows, all
+  weighted equally by the summary functions. The internal comment that each
+  matched set held exactly one concordant and one discordant patient was wrong
+  for `ratio > 1` and has been corrected.
+* README quick start: `plot_optimal_drugs()` used a tolerance column from a
+  `get_best_drugs(rank = 1)` call; the call now uses `tolerance = 3`.
+
+## Input checks
+
+* `drug_var` and `outcome_var` are rejected as `matching_var`, `match.exact` or
+  `adjustment_var` (and `outcome_var` as `match.antiexact`) with a clear message.
+* A variable that is both exact and anti-exact after all overrides is rejected
+  before calling MatchIt.
+* Non-pair matching methods (e.g. `"full"`, `"subclass"`, `"exact"`) fail with a
+  message explaining that each treated patient must be linked to its own
+  control(s).
+* Missing values in `match.exact` / `match.antiexact` variables now exclude the
+  patient before matching, as missing `matching_var` values already did.
+
 # cateval 2.3.0
 
 ## Multiple `cal_groups` in `benefit_by_group()`

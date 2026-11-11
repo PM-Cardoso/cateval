@@ -7,6 +7,12 @@
 #' whether the model is well calibrated. Covariate matching can optionally be
 #' applied before the effects are estimated.
 #'
+#' The predicted benefit is expected on the scale \code{drugs[1]} minus
+#' \code{drugs[2]} (as produced by \code{\link{pairwise_calibration}}), so a
+#' negative value means \code{drugs[1]} is predicted to give the lower (better)
+#' outcome. \code{coef} is the observed difference in outcome on
+#' \code{drugs[1]} relative to \code{drugs[2]}, on the same scale.
+#'
 #' If several values are supplied to `cal_groups`, the process is repeated for
 #' each value and the results are combined. Matching, when requested, is carried
 #' out once and the same matched cohort is reused for every value of
@@ -19,10 +25,10 @@
 #' @param outcome_var Character string. Column name for the outcome variable (e.g., clinical measurement).
 #' @param cal_groups Numeric or numeric vector. Number(s) of calibration groups (e.g., quantiles) to divide the data into based on predicted benefit.
 #' @param matching Logical. Whether to perform covariate matching using the `MatchIt` package before estimating treatment effects.
-#' @param adjustment_var Optional character vector. Names of covariates to include as adjustment variables in the regression model.
-#' @param matching_var Optional character vector. Covariates to use for matching. Defaults to `adjustment_var` if not specified.
-#' @param match.exact Optional character vector. Variables for exact matching.
-#' @param match.antiexact Optional character vector. Variables for anti-exact matching.
+#' @param adjustment_var Optional character vector. Names of covariates to include as adjustment variables in the regression model. Must not include `drug_var` or `outcome_var`.
+#' @param matching_var Optional character vector. Covariates to use for matching. Defaults to `adjustment_var` if not specified. Must not include `drug_var` or `outcome_var`. Patients with a missing value in any `matching_var`, `match.exact` or `match.antiexact` variable are excluded before matching.
+#' @param match.exact Optional character vector. Variables for exact matching. Must not include `drug_var`, since matched patients are always required to have received different drugs.
+#' @param match.antiexact Optional character vector. Additional variables for anti-exact matching. The received drug is always included (see Details).
 #' @param caliper Optional named numeric vector passed to \code{MatchIt::matchit}
 #'   (e.g. \code{c(prehba1c = 0.4)}); interpreted in standard-deviation units by
 #'   default (see \code{std.caliper}).
@@ -38,10 +44,14 @@
 #'   one matched set (default \code{TRUE}). See the note on confidence intervals
 #'   below.
 #' @param ratio Numeric. Number of controls matched to each treated patient
-#'   (default \code{1}).
+#'   (default \code{1}). With \code{ratio > 1} every matched patient enters the
+#'   outcome model with equal weight (MatchIt's matching weights are not used),
+#'   so a treated patient counts once alongside each of its controls.
 #' @param match_args Optional named list of further arguments for
-#'   \code{MatchIt::matchit}. Applied last, so it overrides the arguments above
-#'   and gives access to any matching option not exposed here.
+#'   \code{MatchIt::matchit}. Applied after the arguments above, so it overrides
+#'   them and gives access to any matching option not exposed here. The
+#'   anti-exact constraint on the received drug is re-applied afterwards and
+#'   cannot be removed; an \code{antiexact} entry adds to it.
 #' @param return_matched Logical. If \code{TRUE}, return a list that also
 #'   contains the matched cohort and the \code{matchit} object, so the matching
 #'   can be inspected (for example with a balance plot). Default \code{FALSE}.
@@ -58,8 +68,8 @@
 #'
 #' \describe{
 #'   \item{mean}{The mean predicted benefit score for patients in the calibration group.}
-#'   \item{coef}{Estimated average treatment effect (regression coefficient) comparing the two drugs, adjusted if covariates are specified.}
-#'   \item{coef_low}{Lower bound of the confidence interval for the treatment effect.}
+#'   \item{coef}{Estimated average treatment effect (regression coefficient) comparing the two drugs, adjusted if covariates are specified. \code{NA} when the group does not contain patients on both drugs.}
+#'   \item{coef_low}{Lower bound of the confidence interval for the treatment effect. \code{NA} when the effect, or its interval, cannot be estimated (see Details).}
 #'   \item{coef_high}{Upper bound of the confidence interval for the treatment effect.}
 #'   \item{n_groups}{Number of calibration groups (i.e., the value of cal_groups) used to create this stratification.}
 #'   \item{drug1}{Name of the first drug in the comparison (from `drugs[1]`).}
@@ -74,6 +84,27 @@
 #' \code{matching = FALSE}, since no matching was performed.
 #'
 #' @details
+#' \strong{Matching.} When \code{matching = TRUE}, patients predicted to do
+#' better on \code{drugs[1]} (\code{benefit_var <= 0}) form the treated group
+#' and are matched to patients predicted to do better on \code{drugs[2]}. The
+#' match is always anti-exact on the received drug, so every matched set
+#' contains patients who received different drugs, the same requirement as in
+#' \code{\link{match_benefit_pairs}}. Arguments are layered as package defaults,
+#' then the named arguments (\code{method}, \code{distance}, \code{replace},
+#' \code{ratio}, \code{caliper}, \code{std.caliper}, \code{match.exact},
+#' \code{match.antiexact}), then \code{match_args}; the anti-exact constraint
+#' on the received drug is re-applied last. Only pair-matching methods (e.g.
+#' \code{"nearest"}, \code{"optimal"}, \code{"genetic"}) can be used. If no
+#' matches can be formed (for example, every patient predicted to do better on
+#' one drug received the same drug as every patient predicted to do better on
+#' the other), \code{NULL} is returned with a warning.
+#'
+#' \strong{Groups too small for an interval.} A group's Wald interval needs at
+#' least one residual degree of freedom in the outcome model (more patients than
+#' model coefficients). When that is not met the point estimate is still
+#' returned but \code{coef_low} and \code{coef_high} are \code{NA}, with a
+#' warning naming the group.
+#'
 #' \strong{Bootstrap intervals.} The calibration groups are fixed from the
 #' original cohort before bootstrapping, so each replicate re-estimates the
 #' treatment effect for the *same* groups rather than shifting the group
@@ -172,6 +203,10 @@ pairwise_calibration_pair <- function(data,
   if (!(benefit_var %in% colnames(data))) stop("benefit_var not found in data")
   if (!(outcome_var %in% colnames(data))) stop("outcome_var not found in data")
   if (!is.null(adjustment_var) && !all(adjustment_var %in% colnames(data))) stop("Some adjustment_var not in data")
+  .check_reserved_vars(
+    list(adjustment_var = adjustment_var),
+    c(drug_var = drug_var, outcome_var = outcome_var)
+  )
   if (isTRUE(matching)) {
     if (length(matching_var) == 0) stop("Provide at least one matching_var")
     if (!all(matching_var %in% colnames(data))) stop("Some matching_var not in data")
@@ -184,6 +219,17 @@ pairwise_calibration_pair <- function(data,
     if (!is.logical(replace)) stop("`replace` must be TRUE or FALSE.")
     if (!is.numeric(ratio) || length(ratio) != 1 || ratio < 1) stop("`ratio` must be a single number of at least 1.")
     if (!is.list(match_args)) stop("`match_args` must be a list.")
+    .check_named_list(match_args, "match_args")
+    .check_reserved_vars(
+      list(matching_var = matching_var, match.exact = match.exact),
+      c(drug_var = drug_var, outcome_var = outcome_var)
+    )
+    .check_reserved_vars(list(match.antiexact = match.antiexact), c(outcome_var = outcome_var))
+    # The received drug is anti-exact internally (on a copy of drug_var), so an
+    # exact match on drug_var under its own name is the same contradiction.
+    if (drug_var %in% .spec_vars(match_args$exact)) {
+      stop("Variable(s) ", drug_var, " cannot be matched both exactly and anti-exactly.")
+    }
   }
   if (length(drugs) != 2) stop("Exactly two drugs must be specified")
   if (!all(drugs %in% unique(data[[drug_var]]))) stop("Some specified drugs not present in drug_var column")
@@ -196,22 +242,32 @@ pairwise_calibration_pair <- function(data,
   if (!is.numeric(conf) || length(conf) != 1 || conf <= 0 || conf >= 1) stop("`conf` must be a single number between 0 and 1.")
 
   # Prepare the two-drug cohort ----
+  # The working columns are added as copies rather than renaming the originals,
+  # so every column name the caller may refer to (in matching_var, match.exact,
+  # match.antiexact, caliper or match_args) is still present under that name.
+  internal_cols <- c(dataset_benefit = benefit_var, dataset_drug_var = drug_var,
+                     dataset_outcome_var = outcome_var)
+  clash <- names(internal_cols)[names(internal_cols) %in% colnames(data) &
+                                  names(internal_cols) != internal_cols]
+  if (length(clash) > 0) {
+    stop("`data` must not contain column(s) ", paste(clash, collapse = ", "),
+         ", which are used internally.")
+  }
+
+  initial_dataset <- data
+  for (col in names(internal_cols)) {
+    initial_dataset[[col]] <- data[[internal_cols[[col]]]]
+  }
+  initial_dataset <- initial_dataset[initial_dataset$dataset_drug_var %in% drugs, , drop = FALSE]
+
   # Matching does not depend on cal_groups, so it is done once here and the same
   # matched cohort is reused for every requested number of calibration groups.
-  initial_dataset <- data %>%
-    dplyr::rename(
-      dataset_benefit = !!benefit_var,
-      dataset_drug_var = !!drug_var,
-      dataset_outcome_var = !!outcome_var
-    ) %>%
-    dplyr::filter(dataset_drug_var %in% drugs)
-
   match_model <- NULL
 
   if (isTRUE(matching)) {
     initial_dataset <- initial_dataset %>%
       dplyr::mutate(conc_disc_label = ifelse(dataset_benefit <= 0, 1, 0)) %>%
-      tidyr::drop_na(dplyr::all_of(matching_var))
+      tidyr::drop_na(dplyr::all_of(unique(c(matching_var, match.exact, match.antiexact))))
 
     # Matching needs both groups present; if only one is, there is nothing to
     # compare and no results can be produced for this drug pair.
@@ -222,34 +278,45 @@ pairwise_calibration_pair <- function(data,
       return(NULL)
     }
 
-    categorical_vars <- matching_var[sapply(initial_dataset[matching_var], function(x) is.factor(x) || is.character(x))]
-    cont_vars <- setdiff(matching_var, c(categorical_vars, match.exact, match.antiexact))
-
-    matching_formula <- paste("conc_disc_label ~", paste(cont_vars, collapse = " + "))
-    for (v in categorical_vars) {
-      if (length(unique(initial_dataset[[v]])) > 1) {
-        matching_formula <- paste(matching_formula, "+", v)
-      }
-    }
-
-    if (!is.null(seed)) set.seed(seed)
-
-    # match_args is applied last so it can override any of the named arguments.
-    matchit_args <- list(
-      formula = stats::as.formula(matching_formula),
-      data = initial_dataset,
-      method = method,
-      distance = distance,
-      replace = replace,
-      ratio = ratio,
-      exact = match.exact,
-      antiexact = match.antiexact,
-      caliper = caliper,
-      std.caliper = std.caliper
+    matching_formula <- .build_match_formula(
+      initial_dataset, matching_var, match.exact, match.antiexact,
+      treat_var = "conc_disc_label"
     )
-    match_model <- do.call(MatchIt::matchit, utils::modifyList(matchit_args, match_args))
 
-    calibration_data <- MatchIt::get_matches(match_model, data = initial_dataset)
+    # The received drug is always anti-exact, so a matched set never compares
+    # patients on the same drug; it is re-applied after match_args.
+    # When no patient can be matched (e.g. a tight caliper, or no admissible
+    # control on the other drug), MatchIt stops with "No units were matched".
+    # That is reported as a warning so that, inside pairwise_calibration(), one
+    # unmatchable drug pair does not abort the remaining pairs.
+    forced_antiexact <- "dataset_drug_var"
+    match_model <- tryCatch(
+      .run_match(
+        initial_dataset, matching_formula,
+        exact_vars = match.exact,
+        antiexact_vars = unique(c(setdiff(match.antiexact, drug_var), forced_antiexact)),
+        caliper = caliper, seed = seed,
+        method = method, distance = distance, replace = replace, ratio = ratio,
+        std.caliper = std.caliper, match_args = match_args,
+        forced_antiexact = forced_antiexact
+      ),
+      error = function(e) {
+        if (grepl("no units were matched", conditionMessage(e), ignore.case = TRUE)) return(NULL)
+        stop(e)
+      }
+    )
+
+    calibration_data <- if (is.null(match_model)) initial_dataset[0, , drop = FALSE] else
+      .get_matched_data(match_model, initial_dataset)
+
+    if (nrow(calibration_data) == 0) {
+      warning("No matches could be formed for ", drugs[1], " vs ", drugs[2],
+              "; no results are returned for this pair.")
+      if (isTRUE(return_matched)) {
+        return(list(results = NULL, matched = NULL, matchit = match_model))
+      }
+      return(NULL)
+    }
 
   } else {
     calibration_data <- initial_dataset
@@ -265,6 +332,7 @@ pairwise_calibration_pair <- function(data,
     mean_vals <- rep(NA_real_, cg)
     n_drug1   <- rep(0, cg)
     n_drug2   <- rep(0, cg)
+    no_ci_groups <- integer(0)
 
     grouped_data <- calibration_data %>%
       dplyr::mutate(grouping = dplyr::ntile(dataset_benefit, cg))
@@ -288,10 +356,25 @@ pairwise_calibration_pair <- function(data,
       coef[g] <- stats::coef(model)[2]
 
       if (!isTRUE(bootstrap)) {
-        ci <- suppressMessages(stats::confint.default(model, level = conf))
-        coef_low[g]  <- ci[2, 1]
-        coef_high[g] <- ci[2, 2]
+        # With no residual degrees of freedom the dispersion, and so the
+        # interval, cannot be estimated.
+        if (model$df.residual >= 1 && !is.na(coef[g])) {
+          ci <- suppressMessages(stats::confint.default(model, level = conf))
+          coef_low[g]  <- ci[2, 1]
+          coef_high[g] <- ci[2, 2]
+        } else if (!is.na(coef[g])) {
+          no_ci_groups <- c(no_ci_groups, g)
+        }
       }
+    }
+
+    if (length(no_ci_groups) > 0) {
+      warning(
+        drugs[1], " vs ", drugs[2], ", cal_groups = ", cg, ": group(s) ",
+        paste(no_ci_groups, collapse = ", "),
+        " have too few patients to estimate a confidence interval ",
+        "(coef_low / coef_high set to NA)."
+      )
     }
 
     # Percentile bootstrap intervals ----

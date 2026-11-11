@@ -45,7 +45,8 @@ A data frame stacking the \code{\link{benefit_by_group}} output for each
 drug class and each requested \code{cal_groups} value, with an
 \code{index_drug} column identifying the drug class that anchors each group
 and an \code{n_groups} column giving the number of calibration groups used.
-Suitable for faceting.
+Suitable for faceting. Small or empty groups are handled as in
+\code{\link{benefit_by_group}}, with warnings naming the drug class.
 }
 \description{
 Runs \code{\link{benefit_by_group}} separately within each drug class, where a

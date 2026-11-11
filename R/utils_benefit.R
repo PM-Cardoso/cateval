@@ -1,72 +1,186 @@
 # Internal helpers for the overall-benefit calibration workflow.
 #
-# These functions are not exported. They are shared by match_benefit_pairs()
-# and the benefit_* summary functions so that the matching logic, the
-# concordant/discordant labelling and the confidence-interval helpers live in
-# one place. Everything here works on the "predicted-best drug" convention:
+# These functions are not exported. They are shared by match_benefit_pairs(),
+# pairwise_calibration_pair() and the benefit_* summary functions so that the
+# matching logic, the concordant/discordant labelling and the
+# confidence-interval helpers live in one place. Everything here works on the "predicted-best drug" convention:
 # for each patient the recommended drug is the one with the lowest predicted
 # outcome, and a patient is concordant if they received that drug.
 
 
-# Longest common prefix of the prediction column names ----------------------
+# Work out which drug each prediction column refers to ---------------------
 #
-# The prediction columns share a prefix (e.g. "pred." in "pred.SGLT2"). We
-# strip it to recover the drug names and rebuild individual column names when
-# looking up a specific drug's prediction.
+# The overall-benefit workflow needs, for every prediction column, the drug name
+# exactly as it appears in the received-drug column, so that "received the
+# predicted-best drug" can be checked and a pair's predictions looked up. Drug
+# names are whatever the user's data contains (classes, molecules, trial arms,
+# numeric codes...), so nothing here assumes particular names.
 #
-# @param strings Character vector of column names.
-# @return A single character string with the shared leading characters.
+# In order of preference:
+#   1. `drugs`, supplied by the caller, one per column (by position);
+#   2. the names of a named `pred_cols` vector, e.g. c(A = "pred_A");
+#   3. inferred from the drugs observed in the received-drug column. Each column
+#      is assigned the observed drug its name ends with (any prefix, e.g.
+#      "pred.A", "yhat_outcome_A"), or failing that the observed drug its name
+#      starts with (any suffix, e.g. "A_pred"); when several observed drugs fit,
+#      the longest is taken (so "pred.BA" is BA, not A). If that fails, the same
+#      is tried ignoring case, keeping the spelling used in the received-drug
+#      column (only when no two observed drugs differ by case alone).
+#      A drug that has predictions but that nobody received cannot be found
+#      this way; when at least two columns are matched and all share one
+#      prefix/suffix pattern, the remaining columns are read with that pattern.
+# The two less direct routes (ignoring case, reading a pattern) report the
+# mapping they used in a message. If no unambiguous assignment exists the
+# caller is asked to supply `drugs` rather than a guess being made.
+#
+# Inference is anchored on the observed drug names rather than on a common
+# prefix of the column names, because a common prefix can run into the drug
+# names themselves (e.g. "pred.SGLT2" / "pred.SU" share "pred.S").
+#
+# @param pred_cols Prediction column names (optionally named by drug).
+# @param drugs Optional vector of drug names, one per column.
+# @param observed Values of the received-drug column.
+# @return A character vector of drug names, one per element of pred_cols.
 # @noRd
-.common_prefix <- function(strings) {
-  min_len <- min(nchar(strings))
-  prefix <- ""
-  for (i in seq_len(min_len)) {
-    current_chars <- substr(strings, i, i)
-    if (length(unique(current_chars)) == 1) {
-      prefix <- paste0(prefix, current_chars[1])
-    } else {
-      break
+.resolve_drug_names <- function(pred_cols, drugs = NULL, observed = NULL) {
+
+  if (is.null(drugs) && !is.null(names(pred_cols)) && all(names(pred_cols) != "")) {
+    drugs <- names(pred_cols)
+  }
+
+  if (!is.null(drugs)) {
+    .check_drug_names(drugs, pred_cols)
+    return(as.character(drugs))
+  }
+
+  observed <- unique(as.character(observed[!is.na(observed)]))
+  observed <- observed[observed != ""]
+  cols <- unname(pred_cols)
+
+  # Case-insensitive matching is only safe when the observed drugs stay
+  # distinct once case is ignored.
+  case_modes <- if (anyDuplicated(tolower(observed))) FALSE else c(FALSE, TRUE)
+
+  match_columns <- function(ignore_case, at_end) {
+    fold <- if (ignore_case) tolower else identity
+    test <- if (at_end) endsWith else startsWith
+    vapply(cols, function(col) {
+      hits <- observed[test(fold(col), fold(observed))]
+      if (length(hits) == 0) NA_character_ else hits[which.max(nchar(hits))]
+    }, character(1), USE.NAMES = FALSE)
+  }
+  modes <- expand.grid(at_end = c(TRUE, FALSE), ignore_case = case_modes)
+
+  # Pass 1: every column matched to an observed drug. All matching variants are
+  # tried before any pattern is read, so a drug that *is* in drug_var (perhaps
+  # in a different case) is never treated as one nobody received.
+  for (i in seq_len(nrow(modes))) {
+    candidate <- match_columns(modes$ignore_case[i], modes$at_end[i])
+    if (!anyNA(candidate) && !anyDuplicated(candidate)) {
+      if (modes$ignore_case[i]) .report_drug_mapping(cols, candidate, "matching drug names ignoring case")
+      return(candidate)
     }
   }
-  prefix
+
+  # Pass 2: some columns matched. If they all follow one pattern, read the
+  # remaining columns (drugs that nobody in the data received) with it.
+  for (i in seq_len(nrow(modes))) {
+    at_end <- modes$at_end[i]
+    candidate <- match_columns(modes$ignore_case[i], at_end)
+    matched <- !is.na(candidate)
+    if (sum(matched) < 2 || !any(!matched) || anyDuplicated(candidate[matched])) next
+
+    n_col <- nchar(cols[matched])
+    n_drug <- nchar(candidate[matched])
+    prefix <- if (at_end) substr(cols[matched], 1, n_col - n_drug) else rep("", sum(matched))
+    suffix <- if (at_end) rep("", sum(matched)) else substr(cols[matched], n_drug + 1, n_col)
+    if (length(unique(prefix)) != 1 || length(unique(suffix)) != 1) next
+
+    pre <- prefix[1]
+    suf <- suffix[1]
+    rest <- cols[!matched]
+    fits <- startsWith(rest, pre) & endsWith(rest, suf) & nchar(rest) > nchar(pre) + nchar(suf)
+    if (!all(fits)) next
+
+    candidate[!matched] <- substr(rest, nchar(pre) + 1, nchar(rest) - nchar(suf))
+    if (anyDuplicated(candidate)) next
+
+    .report_drug_mapping(
+      cols, candidate,
+      paste0("reading the column pattern \"", pre, "<drug>", suf, "\" for drug(s) ",
+             "that no patient in `drug_var` received (",
+             paste(candidate[!matched], collapse = ", "), ")")
+    )
+    return(candidate)
+  }
+
+  stop(
+    "Could not work out which drug each column in `pred_cols` refers to from ",
+    "the drugs in `drug_var` (",
+    paste(observed, collapse = ", "), "). Supply `drugs`, one name per ",
+    "`pred_cols` column in the same order and spelled as in `drug_var`, or ",
+    "name the vector by drug, e.g. pred_cols = c(<drug> = \"<column>\", ...).",
+    call. = FALSE
+  )
+}
+
+
+# Tell the user which drug was taken for each column, when it was inferred
+# indirectly. @noRd
+.report_drug_mapping <- function(cols, drug_names, how) {
+  message(
+    "Drug names for `pred_cols` were inferred by ", how, ": ",
+    paste0(cols, " -> ", drug_names, collapse = ", "),
+    ". Supply `drugs` to set them explicitly."
+  )
 }
 
 
 # Label each patient as concordant or discordant ----------------------------
 #
-# Adds three internal columns to the data:
+# Adds internal columns to the data:
 #   cateval_best_drug  - the predicted-best (rank 1) drug name
 #   cateval_concordant - 1 if the received drug is the recommended drug
 #                        (or, with a tolerance, any drug within the tolerance
 #                        of the best), 0 otherwise
 #   cateval_tol_*      - only when a tolerance is used: the individual drugs in
 #                        the tolerance set, used later for anti-exact matching
+# plus the cateval_rank1_* / cateval_within_* columns written by
+# get_best_drugs(), which are kept for inspection.
+#
+# Drug-set membership is tested literally (split on the "," that
+# get_ranked_or_tolerant_drugs() uses to join the set), so drug names that
+# contain spaces, hyphens or regular-expression characters (e.g. "GLP-1 RA")
+# are handled correctly.
 #
 # @param data Data frame containing the drug column and the prediction columns.
 # @param drug_var Name of the received-drug column.
 # @param pred_cols Prediction column names.
-# @param prefix Shared prefix of pred_cols.
+# @param drug_names Drug name for each element of pred_cols.
 # @param conc_tolerance Optional numeric tolerance defining the best-drug set.
 # @return A list with the labelled data and the extra anti-exact variables.
 # @noRd
-.label_concordance <- function(data, drug_var, pred_cols, prefix, conc_tolerance = NULL) {
+.label_concordance <- function(data, drug_var, pred_cols, drug_names, conc_tolerance = NULL) {
 
   `%>%` <- dplyr::`%>%`
+
+  label_prefix <- "cateval_"
+  received <- as.character(data[[drug_var]])
 
   # Predicted-best (rank 1) drug for every patient.
   labelled <- get_best_drugs(
     data = data,
     rank = 1,
     column_names = pred_cols,
-    final_var_name = prefix
+    final_var_name = label_prefix,
+    drugs = drug_names
   ) %>%
-    dplyr::rename(cateval_best_drug = paste0(prefix, "rank1_drug_name"))
+    dplyr::rename(cateval_best_drug = paste0(label_prefix, "rank1_drug_name"))
 
   if (is.null(conc_tolerance)) {
 
     # Strict definition: concordant means received the single recommended drug.
-    labelled <- labelled %>%
-      dplyr::mutate(cateval_concordant = ifelse(.data[[drug_var]] == cateval_best_drug, 1, 0))
+    labelled$cateval_concordant <- as.numeric(received == labelled$cateval_best_drug)
 
     antiexact_extra <- NULL
 
@@ -83,23 +197,25 @@
       data = labelled,
       tolerance = conc_tolerance,
       column_names = pred_cols,
-      final_var_name = prefix
+      final_var_name = label_prefix,
+      drugs = drug_names
     ) %>%
-      dplyr::rename(cateval_tol_set = paste0(prefix, "within_", conc_tolerance, "_of_best_drug_name")) %>%
-      dplyr::mutate(
-        cateval_concordant = ifelse(
-          stringr::str_detect(cateval_tol_set, paste0("\\b", .data[[drug_var]], "\\b")),
-          1, 0
-        ),
-        cateval_tol_list = stringr::str_split(cateval_tol_set, "\\s*[;,\\s]\\s*")
-      ) %>%
-      dplyr::mutate(cateval_tol_list = purrr::map(cateval_tol_list, ~ rep(.x, length.out = n_drugs))) %>%
-      dplyr::mutate(cateval_tol_list = purrr::map(cateval_tol_list, ~ purrr::set_names(.x, tol_vars))) %>%
-      tidyr::unnest_wider(cateval_tol_list) %>%
-      dplyr::mutate(dplyr::across(
-        dplyr::all_of(tol_vars),
-        ~ dplyr::if_else(cateval_concordant == 0, .data[[drug_var]], .x)
-      ))
+      dplyr::rename(cateval_tol_set = paste0(label_prefix, "within_", conc_tolerance, "_of_best_drug_name"))
+
+    tol_list <- strsplit(labelled$cateval_tol_set, ",", fixed = TRUE)
+    labelled$cateval_concordant <- as.numeric(mapply(function(r, set) r %in% set, received, tol_list))
+
+    # One column per position in the set, recycled to a fixed width. For a
+    # discordant patient every column holds the drug they received, so the
+    # anti-exact constraint on all columns means a discordant match's drug is
+    # not in the concordant patient's set.
+    for (k in seq_len(n_drugs)) {
+      labelled[[tol_vars[k]]] <- ifelse(
+        labelled$cateval_concordant == 0,
+        received,
+        vapply(tol_list, function(set) rep(set, length.out = n_drugs)[k], character(1))
+      )
+    }
 
     antiexact_extra <- tol_vars
   }
@@ -110,26 +226,55 @@
 
 # Build the matching formula from the matching covariates -------------------
 #
-# Continuous covariates enter directly (Mahalanobis distance handles them);
-# categorical covariates are added only when they have more than one level in
-# the data. Continuous covariates already handled by exact / anti-exact
-# matching are dropped from the distance formula; categorical ones are not,
-# since they are constant within an exact stratum and so contribute nothing to
-# the distance anyway.
+# Shared by both workflows. Continuous covariates enter directly (Mahalanobis
+# distance handles them); categorical covariates are added only when they have
+# more than one level in the data. Continuous covariates already handled by
+# exact / anti-exact matching are dropped from the distance formula;
+# categorical ones are not, since they are constant within an exact stratum and
+# so contribute nothing to the distance anyway. With no covariates left the
+# right-hand side is "1", which suits exact-only methods.
 #
-# @return A formula string of the form "cateval_treated ~ x1 + x2 + ...".
+# @param treat_var Name of the 0/1 treatment column the formula is for.
+# @return A formula string of the form "treat_var ~ x1 + x2 + ...".
 # @noRd
-.build_match_formula <- function(data, matching_var, match.exact, match.antiexact) {
-  categorical_vars <- matching_var[sapply(data[matching_var], function(x) is.factor(x) || is.character(x))]
+.build_match_formula <- function(data, matching_var, match.exact, match.antiexact,
+                                 treat_var = "cateval_treated") {
+  categorical_vars <- matching_var[vapply(data[matching_var], function(x) is.factor(x) || is.character(x), logical(1))]
   cont_vars <- setdiff(matching_var, c(categorical_vars, match.exact, match.antiexact))
 
-  formula_str <- paste("cateval_treated ~", paste(cont_vars, collapse = " + "))
+  terms <- cont_vars
   for (v in categorical_vars) {
-    if (length(unique(data[[v]])) > 1) {
-      formula_str <- paste(formula_str, "+", v)
+    if (length(unique(data[[v]])) > 1) terms <- c(terms, v)
+  }
+  if (length(terms) == 0) terms <- "1"
+
+  paste(treat_var, "~", paste(terms, collapse = " + "))
+}
+
+
+# Reject variables the method itself defines ---------------------------------
+#
+# The received drug and the outcome are part of the comparison being validated:
+# matching or adjusting on the outcome would condition on the result, and exact
+# matching on the received drug contradicts the requirement that the two sides
+# of a comparison took different drugs.
+#
+# @param vars Named list of character vectors to check, e.g.
+#   list(matching_var = ..., match.exact = ...).
+# @param reserved Named character vector of reserved columns, e.g.
+#   c(drug_var = "drugclass", outcome_var = "hba1c").
+# @noRd
+.check_reserved_vars <- function(vars, reserved) {
+  for (arg in names(vars)) {
+    clash <- intersect(vars[[arg]], reserved)
+    if (length(clash) > 0) {
+      which_role <- names(reserved)[match(clash, reserved)]
+      stop("`", arg, "` must not include ",
+           paste0("`", which_role, "` (", clash, ")", collapse = " or "),
+           ", which defines the comparison being validated.")
     }
   }
-  formula_str
+  invisible(TRUE)
 }
 
 
@@ -158,41 +303,51 @@
 # @noRd
 .protect_vars <- function(user, forced) {
   if (length(forced) == 0) return(user)
-  user_vars <- if (inherits(user, "formula")) all.vars(user) else as.character(user)
-  unique(c(user_vars, forced))
+  unique(c(.spec_vars(user), forced))
+}
+
+
+# Variable names in an exact / antiexact specification (vector or formula).
+# @noRd
+.spec_vars <- function(x) {
+  if (is.null(x)) return(character(0))
+  if (inherits(x, "formula")) all.vars(x) else as.character(x)
 }
 
 
 # Run one match -------------------------------------------------------------
 #
-# A single matching direction. The treated group is whichever group the caller
-# has put in the cateval_treated column (concordant patients in one direction,
-# discordant patients in the other). The matching is exact on the predicted-best
-# drug and forced to differ on the received drug; the remaining behaviour is
-# controlled by the caller and defaults to 1:1 nearest-neighbour Mahalanobis
-# matching with replacement.
+# A single call to MatchIt::matchit(), shared by both workflows. The treated
+# group is whichever group the caller has coded 1 in the formula's treatment
+# column: concordant or discordant patients in the overall-benefit workflow,
+# patients predicted to do better on the first drug in the pairwise workflow.
+# Behaviour defaults to 1:1 nearest-neighbour Mahalanobis matching with
+# replacement.
 #
-# The two overlays are applied in order -- match_args (shared by both
-# directions) then match_args_dir (this direction only) -- so a direction can
-# override the shared list, which in turn overrides the named arguments. They
-# are applied in sequence against the accumulated list rather than merged with
-# each other first, because modifyList() treats NULL as removal: merging first
-# would discard a NULL in match_args_dir instead of using it to unset the
-# argument it names.
+# Arguments are layered in order -- the named arguments, then match_args
+# (shared by both directions), then match_args_dir (this direction only) -- so
+# later layers win. The overlays are applied in sequence against the
+# accumulated list rather than merged with each other first, because
+# modifyList() treats NULL as removal: merging first would discard a NULL in
+# match_args_dir instead of using it to unset the argument it names.
+#
+# `forced_exact` / `forced_antiexact` are then re-applied, so no override can
+# drop the constraints that make a comparison interpretable. Supplying `exact`
+# or `antiexact` through the overlays therefore adds to them.
 #
 # @return A MatchIt "matchit" object.
 # @noRd
-.run_benefit_match <- function(data, formula_str, exact_vars, antiexact_vars,
-                               caliper, seed,
-                               method = "nearest",
-                               distance = "mahalanobis",
-                               replace = TRUE,
-                               ratio = 1,
-                               std.caliper = TRUE,
-                               match_args = list(),
-                               match_args_dir = list(),
-                               forced_exact = character(0),
-                               forced_antiexact = character(0)) {
+.run_match <- function(data, formula_str, exact_vars, antiexact_vars,
+                       caliper, seed,
+                       method = "nearest",
+                       distance = "mahalanobis",
+                       replace = TRUE,
+                       ratio = 1,
+                       std.caliper = TRUE,
+                       match_args = list(),
+                       match_args_dir = list(),
+                       forced_exact = character(0),
+                       forced_antiexact = character(0)) {
   if (!is.null(seed)) set.seed(seed)
 
   args <- list(
@@ -211,45 +366,87 @@
   args <- utils::modifyList(args, match_args)
   args <- utils::modifyList(args, match_args_dir)
 
-  # These two constraints are what make a matched pair interpretable: both
-  # patients were recommended the same drug, and they took different ones. They
-  # are re-applied after the overlays so that no override can drop them. The
-  # variables involved are created inside the package and are not visible to the
-  # caller, so this is done silently.
   args$exact     <- .protect_vars(args$exact, forced_exact)
   args$antiexact <- .protect_vars(args$antiexact, forced_antiexact)
+
+  # A variable cannot be both matched exactly and forced to differ; matchit()
+  # would otherwise return no matches with an unhelpful message.
+  both <- intersect(.spec_vars(args$exact), .spec_vars(args$antiexact))
+  if (length(both) > 0) {
+    stop("Variable(s) ", paste(both, collapse = ", "),
+         " cannot be matched both exactly and anti-exactly.")
+  }
 
   do.call(MatchIt::matchit, args)
 }
 
 
+# Matched data, one row per patient per matched set --------------------------
+#
+# A thin wrapper around MatchIt::get_matches() that explains, in cateval's
+# terms, why methods without matched sets (e.g. "full", "subclass", "exact",
+# "cem") cannot be used: both workflows need each treated patient linked to its
+# own control(s).
+#
+# @noRd
+.get_matched_data <- function(match, data) {
+  tryCatch(
+    MatchIt::get_matches(match, data = data),
+    error = function(e) {
+      stop(
+        "cateval needs each treated patient linked to its own matched control(s), ",
+        "which requires a pair-matching method (e.g. method = \"nearest\", ",
+        "\"optimal\" or \"genetic\"). The matching method used (\"", match$info$method,
+        "\") does not produce these. MatchIt reported: ", conditionMessage(e),
+        call. = FALSE
+      )
+    }
+  )
+}
+
+
 # Turn a matched data set into one row per matched pair ---------------------
 #
-# Each subclass produced by MatchIt contains exactly one concordant and one
-# discordant patient, and exactly one treated ("index") and one control patient.
-# The index patient is whichever group was treated in this matching direction:
-# the concordant patient when matching concordant-as-treated, the discordant
-# patient when matching discordant-as-treated. Each pair is anchored on the
-# index patient, and we compute:
-#   pred.benefit - the index patient's predicted advantage of the recommended
-#                  drug over the discordant (non-recommended) drug of the pair,
-#                  i.e. index_pred[discordant_drug] - index_pred[recommended_drug]
-#                  (positive = model expects the recommended drug to give a
+# MatchIt::get_matches() returns one matched set ("subclass") per treated
+# patient: that treated ("index") patient plus the `ratio` control(s) matched
+# to it (fewer if a caliper or a shortage of controls left it short). Within a
+# matching direction every treated patient is in the same group -- concordant
+# when matching concordant-as-treated, discordant when matching
+# discordant-as-treated -- and every control is in the other group, because
+# the treatment indicator *is* the concordance label (or its reverse).
+#
+# Each treated patient is therefore paired with each of its controls, giving
+# one row per treated-control pair: one row per treated patient when
+# ratio = 1, and up to `ratio` rows (all sharing the same treated patient) when
+# ratio > 1. For each row:
+#   pred.benefit - the index patient's predicted advantage of the concordant
+#                  drug over the discordant drug of the pair, i.e.
+#                  index_pred[discordant_drug] - index_pred[concordant_drug]
+#                  (positive = model expects the concordant drug to give a
 #                  lower / better outcome)
-#   obs.benefit  - the observed outcome difference between the discordant and
-#                  concordant patient on the same scale
+#   obs.benefit  - the observed outcome of the discordant patient minus that of
+#                  the concordant patient, on the same scale
 #   index_drug   - the drug the index (treated) patient received; used to split
 #                  the calibration by drug class
 #
 # @param matched Output of MatchIt::get_matches(), carrying cateval_concordant,
 #   cateval_treated, cateval_row_id, the drug column, the outcome column and the
 #   pred columns.
+# @param drug_names Drug name for each element of pred_cols.
 # @param keep_vars Extra covariate columns to retain for inspection.
-# @return A data frame with one row per matched pair.
+# @return A data frame with one row per treated-control pair.
 # @noRd
-.extract_benefit_pairs <- function(matched, drug_var, outcome_var, pred_cols, prefix, keep_vars = NULL) {
+.extract_benefit_pairs <- function(matched, drug_var, outcome_var, pred_cols, drug_names, keep_vars = NULL) {
 
   `%>%` <- dplyr::`%>%`
+
+  # Guard the structure described above; get_matches() guarantees it for the
+  # pair-matching methods, and the pairing below relies on it.
+  treated_per_set <- tapply(matched$cateval_treated, matched$subclass, sum)
+  if (any(treated_per_set != 1)) {
+    stop("Each matched set must contain exactly one treated patient; got sets with ",
+         paste(sort(unique(treated_per_set[treated_per_set != 1])), collapse = ", "), ".")
+  }
 
   # Index (treated) patient of each pair. The predicted benefit is evaluated
   # from this patient's predictions, so we keep their full prediction vector,
@@ -283,19 +480,21 @@
       outcome_disc = dplyr::all_of(outcome_var)
     )
 
+  # One side of each join has a single row per subclass (the treated patient),
+  # so this yields one row per treated-control pair.
   pairs <- concordant %>%
-    dplyr::inner_join(discordant, by = "subclass") %>%
+    dplyr::inner_join(discordant, by = "subclass", relationship = "many-to-many") %>%
     dplyr::inner_join(index, by = "subclass") %>%
-    dplyr::filter(concordant_drug != discordant_drug)
+    dplyr::filter(as.character(concordant_drug) != as.character(discordant_drug))
 
   # Predicted benefit from the index patient's predictions (matrix indexing is
   # fast and safe for an arbitrary number of drug classes): the recommended drug
   # is the concordant patient's drug, the alternative is the discordant drug.
   pred_matrix <- as.matrix(pairs[, pred_cols])
-  colnames(pred_matrix) <- sub(prefix, "", pred_cols, fixed = TRUE)
+  colnames(pred_matrix) <- drug_names
   row_index <- seq_len(nrow(pairs))
-  pred_recommended <- pred_matrix[cbind(row_index, match(pairs$concordant_drug, colnames(pred_matrix)))]
-  pred_alternative <- pred_matrix[cbind(row_index, match(pairs$discordant_drug, colnames(pred_matrix)))]
+  pred_recommended <- pred_matrix[cbind(row_index, match(as.character(pairs$concordant_drug), drug_names))]
+  pred_alternative <- pred_matrix[cbind(row_index, match(as.character(pairs$discordant_drug), drug_names))]
 
   pairs$pred.benefit <- pred_alternative - pred_recommended
   pairs$obs.benefit <- pairs$outcome_disc - pairs$outcome_conc

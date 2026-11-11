@@ -5,8 +5,14 @@
 #' @param data A data frame containing predicted values in specified columns.
 #' @param rank Integer. Rank of the prediction to select (e.g., 1 = best, 2 = second-best). Ignored if `tolerance` is set.
 #' @param column_names Character vector. Names of the columns containing predicted values.
-#' @param final_var_name Character string. Base name for output columns.
+#' @param final_var_name Character string. Base name for output columns. Also
+#'   the text removed from each name in `column_names` to recover the drug name
+#'   (removed literally, once per name), unless `drugs` is supplied.
 #' @param tolerance Optional numeric. If set, returns all drugs within this tolerance of the best.
+#' @param drugs Optional vector of drug names (character, factor or numeric
+#'   codes), one per element of `column_names` and in the same order. Use this when the drug name cannot be
+#'   recovered by removing `final_var_name` from the column names; the output
+#'   column names are still built from `final_var_name`.
 #'
 #' @return A modified version of the original data frame with two new columns:
 #' \describe{
@@ -19,23 +25,27 @@
 #' preds <- data.frame(pred_A = c(0.1, 0.3), pred_B = c(0.2, 0.2), pred_C = c(0.3, 0.1))
 #' get_best_drugs(preds, rank = 1, column_names = names(preds), final_var_name = "best")
 #' get_best_drugs(preds, tolerance = 0.05, column_names = names(preds), final_var_name = "tolerant")
+#' # drug names given directly; output columns are named "best_rank1_drug_*"
+#' get_best_drugs(preds, rank = 1, column_names = names(preds),
+#'                final_var_name = "best_", drugs = c("A", "B", "C"))
 #' }
 #' 
 #' @export
 # Main wrapper function to apply drug selection logic row-wise
-get_best_drugs <- function(data, rank = 1, column_names = NULL, final_var_name = "", tolerance = NULL) {
+get_best_drugs <- function(data, rank = 1, column_names = NULL, final_var_name = "", tolerance = NULL, drugs = NULL) {
   # Input validation ----
   
   # Check that column_names are provided and exist in the data
   if (is.null(column_names) || !all(column_names %in% colnames(data))) {
     stop("Invalid or missing column_names")
   }
+  if (!is.null(drugs)) .check_drug_names(drugs, column_names)
   
   # Apply selection logic row-wise ----
   
   # Apply get_ranked_or_tolerant_drugs to each row using only the specified columns
   # Results should be a two-column matrix: value (predicted score), name (drug name)
-  results <- t(apply(data[, column_names], 1, get_ranked_or_tolerant_drugs, rank = rank, tolerance = tolerance, column_names = column_names, prediction_column = final_var_name))
+  results <- t(apply(as.data.frame(data)[, column_names, drop = FALSE], 1, get_ranked_or_tolerant_drugs, rank = rank, tolerance = tolerance, column_names = column_names, prediction_column = final_var_name, drugs = drugs))
   
   # Set column names of the results for clarity
   colnames(results) <- c("value", "name")

@@ -18,7 +18,10 @@
 #' @param conf Numeric. Confidence level (default 0.95).
 #'
 #' @return A one-row data frame with \code{observed} (mean observed benefit),
-#'   \code{lower.ci}, \code{upper.ci} and \code{n} (number of pairs).
+#'   \code{lower.ci}, \code{upper.ci} and \code{n} (number of pairs with an
+#'   observed benefit). With fewer than two such pairs the interval cannot be
+#'   computed: \code{lower.ci} and \code{upper.ci} are \code{NA}, with a
+#'   warning (and \code{observed} is \code{NA} when there are none).
 #'
 #' @seealso \code{\link{match_benefit_pairs}}, \code{\link{benefit_by_group}}
 #'
@@ -45,9 +48,13 @@ benefit_overall <- function(pairs,
   alpha <- (1 - conf) / 2
   obs <- pairs$obs.benefit
   n <- sum(!is.na(obs))
-  observed <- mean(obs, na.rm = TRUE)
+  observed <- if (n > 0) mean(obs, na.rm = TRUE) else NA_real_
 
-  if (isTRUE(bootstrap)) {
+  if (n < 2) {
+    warning("Fewer than 2 pairs with an observed benefit (n = ", n,
+            "); no confidence interval can be computed.", call. = FALSE)
+    ci <- c(NA_real_, NA_real_)
+  } else if (isTRUE(bootstrap)) {
     if (!is.null(boot_seed)) set.seed(boot_seed)
     bt <- boot::boot(obs, statistic = function(d, idx) mean(d[idx], na.rm = TRUE), R = n_boot)
     ci <- .percentile_ci(bt$t, conf)

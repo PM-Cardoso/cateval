@@ -49,9 +49,11 @@ A data frame with one row per group and \code{cal_groups} setting:
 \item{group}{Group index, ordered by increasing predicted benefit.}
 \item{pred.benefit}{Mean predicted benefit in the group.}
 \item{obs.benefit}{Mean observed benefit in the group.}
-\item{n}{Number of matched pairs in the group.}
+\item{n}{Number of matched pairs in the group with an observed benefit
+(pairs whose \code{obs.benefit} is missing are not counted, since they do
+not contribute to the mean or its interval).}
 \item{lower.ci, upper.ci}{Confidence-interval bounds for the mean observed
-benefit.}
+benefit. \code{NA} for a group with fewer than two pairs (see Details).}
 }
 }
 \description{
@@ -66,6 +68,15 @@ The group boundaries are fixed from the predicted benefit of \code{pairs}
 before any bootstrapping, so that each bootstrap replicate re-estimates the
 mean observed benefit for the \emph{same} group of patients rather than shifting
 the boundaries between replicates.
+
+\strong{Small groups.} A confidence interval needs at least two pairs with
+an observed benefit. For a group with fewer, the mean is still reported but
+\code{lower.ci} and \code{upper.ci} are \code{NA} (for both the analytical
+and the bootstrap interval, since a bootstrap of a single pair collapses to a
+point). Groups that receive no pairs at all, which can happen with few pairs
+or heavily tied predictions, are omitted from the output. Both cases are
+reported in a single warning per \code{cal_groups} value. Reducing
+\code{cal_groups} avoids them.
 
 When several \code{cal_groups} values are given, each is an independent
 grouping of the same pairs; a plot should show one setting at a time (for

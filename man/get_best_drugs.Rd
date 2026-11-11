@@ -9,7 +9,8 @@ get_best_drugs(
   rank = 1,
   column_names = NULL,
   final_var_name = "",
-  tolerance = NULL
+  tolerance = NULL,
+  drugs = NULL
 )
 }
 \arguments{
@@ -19,9 +20,16 @@ get_best_drugs(
 
 \item{column_names}{Character vector. Names of the columns containing predicted values.}
 
-\item{final_var_name}{Character string. Base name for output columns.}
+\item{final_var_name}{Character string. Base name for output columns. Also
+the text removed from each name in \code{column_names} to recover the drug name
+(removed literally, once per name), unless \code{drugs} is supplied.}
 
 \item{tolerance}{Optional numeric. If set, returns all drugs within this tolerance of the best.}
+
+\item{drugs}{Optional vector of drug names (character, factor or numeric
+codes), one per element of \code{column_names} and in the same order. Use this when the drug name cannot be
+recovered by removing \code{final_var_name} from the column names; the output
+column names are still built from \code{final_var_name}.}
 }
 \value{
 A modified version of the original data frame with two new columns:
@@ -38,6 +46,9 @@ Applies \code{\link{get_ranked_or_tolerant_drugs}} across all rows of a dataset 
 preds <- data.frame(pred_A = c(0.1, 0.3), pred_B = c(0.2, 0.2), pred_C = c(0.3, 0.1))
 get_best_drugs(preds, rank = 1, column_names = names(preds), final_var_name = "best")
 get_best_drugs(preds, tolerance = 0.05, column_names = names(preds), final_var_name = "tolerant")
+# drug names given directly; output columns are named "best_rank1_drug_*"
+get_best_drugs(preds, rank = 1, column_names = names(preds),
+               final_var_name = "best_", drugs = c("A", "B", "C"))
 }
 
 }

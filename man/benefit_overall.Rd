@@ -31,7 +31,10 @@ reusing a control patient across pairs (matching with replacement).}
 }
 \value{
 A one-row data frame with \code{observed} (mean observed benefit),
-\code{lower.ci}, \code{upper.ci} and \code{n} (number of pairs).
+\code{lower.ci}, \code{upper.ci} and \code{n} (number of pairs with an
+observed benefit). With fewer than two such pairs the interval cannot be
+computed: \code{lower.ci} and \code{upper.ci} are \code{NA}, with a
+warning (and \code{observed} is \code{NA} when there are none).
 }
 \description{
 Summarises a set of matched pairs into a single number: the average observed

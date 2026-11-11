@@ -46,13 +46,13 @@ pairwise_calibration_pair(
 
 \item{matching}{Logical. Whether to perform covariate matching using the \code{MatchIt} package before estimating treatment effects.}
 
-\item{adjustment_var}{Optional character vector. Names of covariates to include as adjustment variables in the regression model.}
+\item{adjustment_var}{Optional character vector. Names of covariates to include as adjustment variables in the regression model. Must not include \code{drug_var} or \code{outcome_var}.}
 
-\item{matching_var}{Optional character vector. Covariates to use for matching. Defaults to \code{adjustment_var} if not specified.}
+\item{matching_var}{Optional character vector. Covariates to use for matching. Defaults to \code{adjustment_var} if not specified. Must not include \code{drug_var} or \code{outcome_var}. Patients with a missing value in any \code{matching_var}, \code{match.exact} or \code{match.antiexact} variable are excluded before matching.}
 
-\item{match.exact}{Optional character vector. Variables for exact matching.}
+\item{match.exact}{Optional character vector. Variables for exact matching. Must not include \code{drug_var}, since matched patients are always required to have received different drugs.}
 
-\item{match.antiexact}{Optional character vector. Variables for anti-exact matching.}
+\item{match.antiexact}{Optional character vector. Additional variables for anti-exact matching. The received drug is always included (see Details).}
 
 \item{caliper}{Optional named numeric vector passed to \code{MatchIt::matchit}
 (e.g. \code{c(prehba1c = 0.4)}); interpreted in standard-deviation units by
@@ -75,11 +75,15 @@ one matched set (default \code{TRUE}). See the note on confidence intervals
 below.}
 
 \item{ratio}{Numeric. Number of controls matched to each treated patient
-(default \code{1}).}
+(default \code{1}). With \code{ratio > 1} every matched patient enters the
+outcome model with equal weight (MatchIt's matching weights are not used),
+so a treated patient counts once alongside each of its controls.}
 
 \item{match_args}{Optional named list of further arguments for
-\code{MatchIt::matchit}. Applied last, so it overrides the arguments above
-and gives access to any matching option not exposed here.}
+\code{MatchIt::matchit}. Applied after the arguments above, so it overrides
+them and gives access to any matching option not exposed here. The
+anti-exact constraint on the received drug is re-applied afterwards and
+cannot be removed; an \code{antiexact} entry adds to it.}
 
 \item{return_matched}{Logical. If \code{TRUE}, return a list that also
 contains the matched cohort and the \code{matchit} object, so the matching
@@ -102,8 +106,8 @@ By default, a data frame where each row corresponds to a calibration group withi
 
 \describe{
 \item{mean}{The mean predicted benefit score for patients in the calibration group.}
-\item{coef}{Estimated average treatment effect (regression coefficient) comparing the two drugs, adjusted if covariates are specified.}
-\item{coef_low}{Lower bound of the confidence interval for the treatment effect.}
+\item{coef}{Estimated average treatment effect (regression coefficient) comparing the two drugs, adjusted if covariates are specified. \code{NA} when the group does not contain patients on both drugs.}
+\item{coef_low}{Lower bound of the confidence interval for the treatment effect. \code{NA} when the effect, or its interval, cannot be estimated (see Details).}
 \item{coef_high}{Upper bound of the confidence interval for the treatment effect.}
 \item{n_groups}{Number of calibration groups (i.e., the value of cal_groups) used to create this stratification.}
 \item{drug1}{Name of the first drug in the comparison (from \code{drugs[1]}).}
@@ -126,10 +130,37 @@ whether the model is well calibrated. Covariate matching can optionally be
 applied before the effects are estimated.
 }
 \details{
+The predicted benefit is expected on the scale \code{drugs[1]} minus
+\code{drugs[2]} (as produced by \code{\link{pairwise_calibration}}), so a
+negative value means \code{drugs[1]} is predicted to give the lower (better)
+outcome. \code{coef} is the observed difference in outcome on
+\code{drugs[1]} relative to \code{drugs[2]}, on the same scale.
+
 If several values are supplied to \code{cal_groups}, the process is repeated for
 each value and the results are combined. Matching, when requested, is carried
 out once and the same matched cohort is reused for every value of
 \code{cal_groups}, so the different groupings are directly comparable.
+
+\strong{Matching.} When \code{matching = TRUE}, patients predicted to do
+better on \code{drugs[1]} (\code{benefit_var <= 0}) form the treated group
+and are matched to patients predicted to do better on \code{drugs[2]}. The
+match is always anti-exact on the received drug, so every matched set
+contains patients who received different drugs, the same requirement as in
+\code{\link{match_benefit_pairs}}. Arguments are layered as package defaults,
+then the named arguments (\code{method}, \code{distance}, \code{replace},
+\code{ratio}, \code{caliper}, \code{std.caliper}, \code{match.exact},
+\code{match.antiexact}), then \code{match_args}; the anti-exact constraint
+on the received drug is re-applied last. Only pair-matching methods (e.g.
+\code{"nearest"}, \code{"optimal"}, \code{"genetic"}) can be used. If no
+matches can be formed (for example, every patient predicted to do better on
+one drug received the same drug as every patient predicted to do better on
+the other), \code{NULL} is returned with a warning.
+
+\strong{Groups too small for an interval.} A group's Wald interval needs at
+least one residual degree of freedom in the outcome model (more patients than
+model coefficients). When that is not met the point estimate is still
+returned but \code{coef_low} and \code{coef_high} are \code{NA}, with a
+warning naming the group.
 
 \strong{Bootstrap intervals.} The calibration groups are fixed from the
 original cohort before bootstrapping, so each replicate re-estimates the

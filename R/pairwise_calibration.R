@@ -8,19 +8,31 @@
 #' Internally, the function calls `pairwise_calibration_pair()` for each drug pair to obtain
 #' subgroup treatment effect estimates and confidence intervals.
 #'
+#' For a pair (drug1, drug2) taken in the order given in `drugs`, the predicted
+#' benefit is the predicted outcome on drug1 minus that on drug2, so a negative
+#' value means drug1 is predicted to be better (lower outcome). When
+#' `matching = TRUE`, patients predicted to do better on drug1 are matched to
+#' patients predicted to do better on drug2, always requiring the matched
+#' patients to have received different drugs; see
+#' \code{\link{pairwise_calibration_pair}} for the details.
+#'
 #' @param data A data.frame containing observed outcomes, treatment assignments, and predicted outcomes for each drug.
 #' @param drug_var Character string specifying the column name of the treatment variable (e.g., assigned drug).
-#' @param drugs Character vector of two or more drug names to be compared pairwise.
+#' @param drugs Vector of two or more drug names to be compared pairwise,
+#'   matching the values in `drug_var` (text, factor levels or numeric codes).
+#'   Pairs are formed in the order given, and the first drug of each pair is
+#'   `drug1` in the output.
 #' @param prediction_vars Character vector of column names corresponding to predicted outcomes for each drug.
-#'   Must be the same length and order as `drugs`.
+#'   Must be the same length and order as `drugs`: `prediction_vars[i]` holds
+#'   the predictions for `drugs[i]`, so the columns may follow any naming scheme.
 #' @param outcome_var Character string specifying the column name of the observed outcome variable.
 #' @param cal_groups Numeric scalar or vector specifying the number(s) of calibration groups (quantiles) to partition
 #'   the population for subgroup analysis.
 #' @param matching Logical; if `TRUE`, performs covariate matching using the `MatchIt` package before estimating effects.
-#' @param adjustment_var Optional character vector of covariate column names to adjust for in regression models.
-#' @param matching_var Optional character vector specifying variables to match on. Defaults to `adjustment_var` if NULL.
-#' @param match.exact Optional character vector of variables for exact matching.
-#' @param match.antiexact Optional character vector of variables for anti-exact matching.
+#' @param adjustment_var Optional character vector of covariate column names to adjust for in regression models. Must not include `drug_var` or `outcome_var`.
+#' @param matching_var Optional character vector specifying variables to match on. Defaults to `adjustment_var` if NULL. Must not include `drug_var` or `outcome_var`.
+#' @param match.exact Optional character vector of variables for exact matching. Must not include `drug_var`.
+#' @param match.antiexact Optional character vector of additional variables for anti-exact matching. The received drug is always anti-exact.
 #' @param caliper Optional named numeric vector passed to \code{MatchIt::matchit}
 #'   (e.g. \code{c(prehba1c = 0.4)}); interpreted in standard-deviation units by
 #'   default (see \code{std.caliper}).
@@ -35,10 +47,13 @@
 #' @param replace Logical. Whether a control patient may be reused in more than
 #'   one matched set (default \code{TRUE}).
 #' @param ratio Numeric. Number of controls matched to each treated patient
-#'   (default \code{1}).
+#'   (default \code{1}). See \code{\link{pairwise_calibration_pair}} for how
+#'   matched sets with several controls are weighted.
 #' @param match_args Optional named list of further arguments for
-#'   \code{MatchIt::matchit}. Applied last, so it overrides the arguments above
-#'   and gives access to any matching option not exposed here.
+#'   \code{MatchIt::matchit}. Applied after the arguments above, so it
+#'   overrides them and gives access to any matching option not exposed here.
+#'   The anti-exact constraint on the received drug is re-applied afterwards and
+#'   cannot be removed.
 #' @param return_matched Logical. If \code{TRUE}, return a list that also
 #'   contains the matched cohort and \code{matchit} object for each drug pair,
 #'   so the matching can be inspected. Default \code{FALSE}.
@@ -54,8 +69,8 @@
 #' @return By default, a data.frame with one row per calibration group and drug pair combination, including:
 #' \describe{
 #'   \item{mean}{Mean predicted benefit in the calibration group.}
-#'   \item{coef}{Estimated treatment effect (regression coefficient) within the group.}
-#'   \item{coef_low}{Lower bound of the confidence interval for the estimate.}
+#'   \item{coef}{Estimated treatment effect (regression coefficient) within the group: the observed outcome on drug1 relative to drug2. \code{NA} when the group does not contain patients on both drugs.}
+#'   \item{coef_low}{Lower bound of the confidence interval for the estimate. \code{NA} when it cannot be estimated (too few patients in the group).}
 #'   \item{coef_high}{Upper bound of the confidence interval.}
 #'   \item{n_groups}{Number of calibration groups used for this stratification (the `cal_groups` value that produced the row).}
 #'   \item{drug1}{Name of the first drug in the pair.}
@@ -144,21 +159,22 @@ pairwise_calibration <- function(data,
   if (!is.numeric(n_boot) || length(n_boot) != 1 || n_boot < 1) stop("`n_boot` must be a single positive number.")
   if (!is.numeric(conf) || length(conf) != 1 || conf <= 0 || conf >= 1) stop("`conf` must be a single number between 0 and 1.")
   if (length(drugs) < 2) stop("At least two drugs must be specified.")
+  if (anyDuplicated(drugs)) stop("`drugs` must not contain duplicated names.")
   if (!all(drugs %in% unique(data[[drug_var]]))) stop("Some `drugs` not present in the `drug_var` column.")
   if (length(drugs) != length(prediction_vars)) stop("`drugs` and `prediction_vars` must have the same length.")
   if (!is.numeric(cal_groups)) stop("`cal_groups` must be numeric.")
   if (!is.logical(matching)) stop("`matching` must be TRUE or FALSE.")
   
   # Prepare dataset
-  calibration_data <- data %>%
-    dplyr::rename(
-      dataset_drug_var = !!drug_var,
-      dataset_outcome_var = !!outcome_var
-    ) %>%
-    dplyr::filter(dataset_drug_var %in% drugs)
+  # Columns keep their original names, so matching_var, match.exact,
+  # match.antiexact, caliper and match_args can refer to any of them as the
+  # caller knows them.
+  calibration_data <- data[data[[drug_var]] %in% drugs, , drop = FALSE]
   
   # Map prediction variables
-  prediction_map <- stats::setNames(prediction_vars, drugs)
+  # Looked up by drug name as text, so numeric drug codes are not mistaken for
+  # positions.
+  prediction_map <- stats::setNames(prediction_vars, as.character(drugs))
   output_table <- NULL
 
   # Matched cohorts and matchit objects, collected per drug pair when requested.
@@ -170,19 +186,16 @@ pairwise_calibration <- function(data,
 
   for (pair in drug_combinations) {
     
-    pair_data <- calibration_data %>%
-      dplyr::filter(dataset_drug_var %in% pair) %>%
-      dplyr::mutate(
-        dataset_drug_var = factor(dataset_drug_var, levels = rev(pair)),
-        benefit = .[[prediction_map[[pair[1]]]]] - .[[prediction_map[[pair[2]]]]]
-      )
-    
+    # Predicted benefit of drug1 over drug2 (negative = drug1 predicted better).
+    pair_data <- calibration_data[calibration_data[[drug_var]] %in% pair, , drop = FALSE]
+    pair_data$cateval_pair_benefit <- pair_data[[prediction_map[[as.character(pair[1])]]]] - pair_data[[prediction_map[[as.character(pair[2])]]]]
+
     calibration_result <- pairwise_calibration_pair(
       data = pair_data,
-      drug_var = "dataset_drug_var",
+      drug_var = drug_var,
       drugs = pair,
-      benefit_var = "benefit",
-      outcome_var = "dataset_outcome_var",
+      benefit_var = "cateval_pair_benefit",
+      outcome_var = outcome_var,
       cal_groups = cal_groups,
       matching = matching,
       adjustment_var = adjustment_var,
