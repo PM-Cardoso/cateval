@@ -110,3 +110,22 @@ test_that("non-pair matching methods give a clear error", {
     "pair-matching method"
   )
 })
+
+
+test_that("data columns called id, distance or weights do not break matching", {
+  d <- make_test_data()
+  ref <- match_benefit_pairs(d, "drugclass", "posthba1cfinal", paste0("pred.", test_drugs),
+                             matching_var = test_matching_var, seed = 1)
+  d$id <- seq_len(nrow(d))
+  d$weights <- 1
+  d$distance <- 0
+  m <- match_benefit_pairs(d, "drugclass", "posthba1cfinal", paste0("pred.", test_drugs),
+                           matching_var = test_matching_var, seed = 1)
+  expect_equal(m$combined$obs.benefit, ref$combined$obs.benefit)
+
+  res <- pw_matched(d)
+  expect_true(all(c("id", "cateval_id", "weights", "cateval_weights") %in% names(res$matched[[1]])))
+
+  d$subclass <- 1
+  expect_error(pw_matched(d), "named \"subclass\"")
+})

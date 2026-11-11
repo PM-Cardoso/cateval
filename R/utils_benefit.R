@@ -383,24 +383,40 @@
 
 # Matched data, one row per patient per matched set --------------------------
 #
-# A thin wrapper around MatchIt::get_matches() that explains, in cateval's
-# terms, why methods without matched sets (e.g. "full", "subclass", "exact",
-# "cem") cannot be used: both workflows need each treated patient linked to its
-# own control(s).
+# A wrapper around MatchIt::get_matches(). get_matches() adds columns named
+# "id", "distance", "weights" and "subclass", and stops if the data already has
+# a column with one of those names. "id" and "weights" in particular are common
+# column names, so when one is taken the added column gets a cateval_ prefix
+# instead; the defaults are kept otherwise, so the matched cohorts look the same
+# as before. "subclass" is used by cateval itself to link the patients of a
+# matched set, so a user column with that name is reported clearly.
+#
+# Methods that do not link each treated patient to its own controls (e.g.
+# "full", "subclass", "exact", "cem") have no match.matrix; that case gets a
+# message in cateval's terms. Any other error is passed on unchanged.
 #
 # @noRd
 .get_matched_data <- function(match, data) {
-  tryCatch(
-    MatchIt::get_matches(match, data = data),
-    error = function(e) {
-      stop(
-        "cateval needs each treated patient linked to its own matched control(s), ",
-        "which requires a pair-matching method (e.g. method = \"nearest\", ",
-        "\"optimal\" or \"genetic\"). The matching method used (\"", match$info$method,
-        "\") does not produce these. MatchIt reported: ", conditionMessage(e),
-        call. = FALSE
-      )
-    }
+  if ("subclass" %in% colnames(data)) {
+    stop("`data` must not contain a column named \"subclass\"; cateval uses it to ",
+         "link the patients of each matched set. Please rename that column.",
+         call. = FALSE)
+  }
+  if (is.null(match$match.matrix)) {
+    stop(
+      "cateval needs each treated patient linked to its own matched control(s), ",
+      "which requires a pair-matching method (e.g. method = \"nearest\", ",
+      "\"optimal\" or \"genetic\"). The matching method used (\"", match$info$method,
+      "\") does not produce these.",
+      call. = FALSE
+    )
+  }
+  free_name <- function(x) if (x %in% colnames(data)) paste0("cateval_", x) else x
+  MatchIt::get_matches(
+    match, data = data,
+    id = free_name("id"),
+    distance = free_name("distance"),
+    weights = free_name("weights")
   )
 }
 

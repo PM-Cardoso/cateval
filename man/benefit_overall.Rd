@@ -43,10 +43,19 @@ interval. This is the headline "how much does following the model pay off"
 estimate, and is typically reported for the pooled (\code{combined}) matched set.
 }
 \examples{
-\dontrun{
+matched <- match_benefit_pairs(
+  cateval_example,
+  drug_var     = "treatment",
+  outcome_var  = "outcome",
+  pred_cols    = c("pred_A", "pred_B", "pred_C"),
+  matching_var = c("age", "sex", "baseline", "marker"),
+  seed         = 1
+)
+
 benefit_overall(matched$combined)
-benefit_overall(matched$combined, bootstrap = TRUE, boot_seed = 42)
-}
+
+# bootstrap interval
+benefit_overall(matched$combined, bootstrap = TRUE, n_boot = 200, boot_seed = 1)
 
 }
 \seealso{

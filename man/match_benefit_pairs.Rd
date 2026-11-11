@@ -35,15 +35,15 @@ matching covariates.}
 \item{drug_var}{Character. Name of the column holding the drug actually
 received.}
 
-\item{outcome_var}{Character. Name of the observed outcome column (e.g. the
-12-month HbA1c). Benefits are computed on this absolute scale.}
+\item{outcome_var}{Character. Name of the observed outcome column (e.g. a score
+measured after treatment). Benefits are computed on this absolute scale.}
 
 \item{pred_cols}{Character vector. Names of the predicted-outcome columns, one
-per drug (e.g. \code{c("pred.SGLT2", "pred.GLP1")}). Lower predicted values
+per drug (e.g. \code{c("pred_A", "pred_B")}). Lower predicted values
 are taken to be better. Any naming scheme can be used; see \code{drugs} and
 the \emph{Drug names} section for how each column is linked to a drug. The
 vector may also be named by drug, e.g.
-\code{c(SGLT2 = "yhat_sglt2", GLP1 = "yhat_glp1")}.}
+\code{c(A = "yhat_a", B = "yhat_b")}.}
 
 \item{matching_var}{Character vector. Covariates used for Mahalanobis distance
 matching. Must not include \code{drug_var} or \code{outcome_var}. Patients
@@ -57,7 +57,7 @@ exactly. The predicted-best drug is always included.}
 a matched pair must differ. The received-drug variable is always included.}
 
 \item{caliper}{Optional named numeric vector passed to \code{MatchIt::matchit}
-(e.g. \code{c(prehba1c = 0.4)}); interpreted in standard-deviation units by
+(e.g. \code{c(baseline = 0.4)}); interpreted in standard-deviation units by
 default (see \code{std.caliper}).}
 
 \item{std.caliper}{Logical. If \code{TRUE} (default), \code{caliper} is read
@@ -184,7 +184,7 @@ a matching variable. Only pair-matching methods (e.g. \code{"nearest"},
 must be linked to its own control(s).
 
 \strong{Drug names.} The package makes no assumption about what the drugs
-are called: they can be drug classes, molecules, trial arms or numeric
+are called: they can be treatments, molecules, trial arms or numeric
 codes, as long as \code{drug_var} and the prediction columns refer to the
 same set. Each column in \code{pred_cols} must be linked to the drug name
 used in \code{drug_var}. This is taken from \code{drugs} if supplied,
@@ -241,47 +241,52 @@ Setting \code{replace = FALSE} removes this dependence (each control is used
 at most once), at the cost of fewer and generally poorer-quality matches.
 }
 \examples{
-\dontrun{
 matched <- match_benefit_pairs(
-  data = analysis_dataset,
-  drug_var = "drugclass",
-  outcome_var = "posthba1cfinal",
-  pred_cols = paste0("pred.", c("SGLT2", "GLP1", "DPP4", "SU", "TZD")),
-  matching_var = c("agetx", "prebmi", "prehba1c", "sex"),
-  match.exact = c("sex"),
-  caliper = c(prehba1c = 0.4),
-  seed = 19840503
+  cateval_example,
+  drug_var     = "treatment",
+  outcome_var  = "outcome",
+  pred_cols    = c("pred_A", "pred_B", "pred_C"),
+  matching_var = c("age", "sex", "baseline", "marker"),
+  seed         = 1
 )
 
-# inspect balance
-plot(summary(matched$matchit$concordant))
-# summarise the pooled set
-benefit_by_group(matched$combined, cal_groups = 10)
+# pairs built in each direction, and both pooled
+sapply(matched[c("concordant", "discordant", "combined")], nrow)
 
-# the same specification, but matching the (larger) discordant direction
-# without replacement and two controls per treated patient
+# which treatment each prediction column was linked to
+matched$drugs
+
+# balance of the concordant-as-treated matching
+summary(matched$matchit$concordant)
+
+# exact on sex, a caliper on baseline, and no replacement in the
+# discordant direction only (MatchIt warns that some patients are left
+# without a match, which is expected without replacement)
 matched2 <- match_benefit_pairs(
-  data = analysis_dataset,
-  drug_var = "drugclass",
-  outcome_var = "posthba1cfinal",
-  pred_cols = paste0("pred.", c("SGLT2", "GLP1", "DPP4", "SU", "TZD")),
-  matching_var = c("agetx", "prebmi", "prehba1c", "sex"),
-  match_args = list(m.order = "random"),
-  match_args_disc = list(replace = FALSE, ratio = 2),
-  seed = 19840503
+  cateval_example,
+  drug_var        = "treatment",
+  outcome_var     = "outcome",
+  pred_cols       = c("pred_A", "pred_B", "pred_C"),
+  matching_var    = c("age", "sex", "baseline", "marker"),
+  match.exact     = "sex",
+  caliper         = c(baseline = 0.25),
+  match_args_disc = list(replace = FALSE),
+  seed            = 1
 )
 
-# prediction columns with a different naming scheme: name them by drug
+# prediction columns with any names: say which treatment each one is
+renamed <- cateval_example
+names(renamed)[8:10] <- c("score_first", "score_second", "score_third")
 matched3 <- match_benefit_pairs(
-  data = analysis_dataset,
-  drug_var = "drugclass",
-  outcome_var = "posthba1cfinal",
-  pred_cols = c(SGLT2 = "hba1c_sglt2_m12", GLP1 = "hba1c_glp1_m12",
-                DPP4 = "hba1c_dpp4_m12"),
-  matching_var = c("agetx", "prebmi", "prehba1c", "sex")
+  renamed,
+  drug_var     = "treatment",
+  outcome_var  = "outcome",
+  pred_cols    = c("score_first", "score_second", "score_third"),
+  matching_var = c("age", "sex", "baseline", "marker"),
+  drugs        = c("A", "B", "C"),
+  seed         = 1
 )
 matched3$drugs
-}
 
 }
 \seealso{

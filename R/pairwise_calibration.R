@@ -1,4 +1,4 @@
-#' Perform Pairwise Heterogeneous Treatment Effect Calibration Across Multiple Drugs
+#' Pairwise Calibration Across Every Pair of Treatments
 #'
 #' This function computes heterogeneous treatment effect calibration curves for all pairwise comparisons
 #' between a specified set of drugs. For each pair, it calculates the predicted benefit (difference between
@@ -34,7 +34,7 @@
 #' @param match.exact Optional character vector of variables for exact matching. Must not include `drug_var`.
 #' @param match.antiexact Optional character vector of additional variables for anti-exact matching. The received drug is always anti-exact.
 #' @param caliper Optional named numeric vector passed to \code{MatchIt::matchit}
-#'   (e.g. \code{c(prehba1c = 0.4)}); interpreted in standard-deviation units by
+#'   (e.g. \code{c(baseline = 0.4)}); interpreted in standard-deviation units by
 #'   default (see \code{std.caliper}).
 #' @param std.caliper Logical. If \code{TRUE} (default), \code{caliper} is read
 #'   in standard-deviation units; if \code{FALSE}, in the variable's own units.
@@ -81,28 +81,41 @@
 #'
 #' If \code{return_matched = TRUE}, a list with elements \code{results} (the
 #' data.frame above), \code{matched} and \code{matchit}. The last two are named
-#' lists with one entry per drug pair (e.g. \code{"SGLT2_vs_GLP1"}), and are
+#' lists with one entry per drug pair (e.g. \code{"A_vs_B"}), and are
 #' \code{NULL} when \code{matching = FALSE}.
 #'
 #' @seealso \code{\link{pairwise_calibration_pair}} for the single-pair engine
 #'   and the details of the bootstrap.
 #'
-#'
 #' @examples
-#' \dontrun{
-#' # Example usage comparing 3 drugs with predicted outcomes
-#' results <- pairwise_calibration(
-#'   data = mydata,
-#'   drug_var = "treatment",
-#'   drugs = c("DrugA", "DrugB", "DrugC"),
-#'   prediction_vars = c("pred_drugA", "pred_drugB", "pred_drugC"),
-#'   outcome_var = "outcome",
-#'   cal_groups = c(3, 5),        # test 3 and 5 calibration groups
-#'   adjustment_var = c("age", "sex"),
-#'   matching = TRUE
+#' # observed vs predicted difference for A vs B, A vs C and B vs C,
+#' # adjusted for patient characteristics
+#' pairwise <- pairwise_calibration(
+#'   cateval_example,
+#'   drug_var        = "treatment",
+#'   drugs           = c("A", "B", "C"),
+#'   prediction_vars = c("pred_A", "pred_B", "pred_C"),
+#'   outcome_var     = "outcome",
+#'   cal_groups      = 5,
+#'   adjustment_var  = c("age", "sex", "baseline", "marker")
 #' )
-#' head(results)
-#' }
+#' head(pairwise)
+#'
+#' # the same with matching, keeping the matched cohorts for a balance check
+#' res <- pairwise_calibration(
+#'   cateval_example,
+#'   drug_var        = "treatment",
+#'   drugs           = c("A", "B", "C"),
+#'   prediction_vars = c("pred_A", "pred_B", "pred_C"),
+#'   outcome_var     = "outcome",
+#'   cal_groups      = 5,
+#'   matching        = TRUE,
+#'   matching_var    = c("age", "sex", "baseline", "marker"),
+#'   seed            = 1,
+#'   return_matched  = TRUE
+#' )
+#' names(res$matched)
+#' summary(res$matchit$A_vs_B)
 #'
 #' @import dplyr
 #' @importFrom utils combn

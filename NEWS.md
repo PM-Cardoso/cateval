@@ -1,3 +1,42 @@
+# cateval 2.5.0
+
+## Example data and a worked example
+
+* New dataset `cateval_example`: 3000 simulated patients on three treatments
+  (`A`, `B`, `C`) with a continuous outcome and a prediction model's expected
+  outcome on each treatment. The model is built to rank treatments well but
+  overstate their differences, so a validation has a known answer (calibration
+  slope about 0.8). The simulation code is in `data-raw/`.
+* New article, "Worked example", on the website. It runs every function on
+  `cateval_example`, with short plotting code and notes on how to read each
+  result.
+* Every help page now has examples that run on `cateval_example`, so the
+  reference pages show real output. None are wrapped in `\dontrun{}` any more.
+* Help pages no longer use diabetes-specific wording or examples; the package
+  applies to any continuous outcome.
+
+## `plot_optimal_drugs()`
+
+* New arguments `title_count`, `title_sets` and `subtitle`. The default titles
+  are neutral; the previous ones referred to HbA1c and mmol/mol.
+* Clearer layout: percentage labels on both charts, readable axis labels, and
+  the second chart split into the groups given in `groups`. The inputs and the
+  tables returned with `plot = FALSE` are unchanged.
+
+## Bug fix
+
+* Matching failed if the data had a column called `id`, `weights` or
+  `distance`, because `MatchIt::get_matches()` adds columns with those names.
+  cateval now gives MatchIt's columns a `cateval_` prefix when the name is
+  taken. A data column called `subclass` gets a clear error, since cateval uses
+  that name to link the patients of each matched set.
+
+## Website
+
+* New "Worked example" tab, a shorter home page with a calibration figure,
+  reorganised reference index (with an "Example data" section), and a cleaner
+  theme.
+
 # cateval 2.4.0
 
 ## Pairwise matching is always anti-exact on the received drug (behaviour change)

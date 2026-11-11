@@ -266,3 +266,21 @@ test_that("a drug nobody received is read from the column pattern, with a messag
   )
   expect_equal(unname(r$drugs), test_drugs)
 })
+
+
+test_that("plot_optimal_drugs uses neutral titles and keeps its summary tables", {
+  sets <- c("A", "A,B", "B", "A,B,C", "C", "A,C")
+  groups <- list("1 treatment" = 1, "2 treatments" = 2, "3 treatments" = 3)
+
+  p <- plot_optimal_drugs(sets, groups)
+  expect_s3_class(p, "patchwork")
+  expect_equal(p[[1]]$labels$title, "Number of near-best treatments")
+
+  p2 <- plot_optimal_drugs(sets, groups, title_count = "Custom", subtitle = "Sub")
+  expect_equal(p2[[1]]$labels$title, "Custom")
+  expect_equal(p2[[1]]$labels$subtitle, "Sub")
+
+  tabs <- plot_optimal_drugs(sets, groups, plot = FALSE)
+  expect_named(tabs, c("overall", "breakdown"))
+  expect_equal(sum(tabs$overall$Count), length(sets))
+})

@@ -6,7 +6,7 @@
 \alias{cateval-package}
 \title{cateval: Validation of Conditional Average Treatment Effects}
 \description{
-Tools for validating the calibration of predicted treatment benefit from treatment-selection models with a continuous outcome. The package covers the two calibration analyses used in the validation procedure: overall benefit, based on matched concordant and discordant patients, and pairwise drug-class effects. Benefit is summarised by group (calibration plot), by the mean benefit of following the model, and by the calibration-in-the-large and calibration slope, each with analytical or optional pair-level bootstrap confidence intervals.
+Tools for validating the calibration of predicted treatment benefit from treatment-selection models with a continuous outcome. The package covers the two calibration analyses used in the validation procedure: overall benefit, based on matched concordant and discordant patients, and pairwise treatment effects. Benefit is summarised by group (calibration plot), by the mean benefit of following the model, and by the calibration-in-the-large and calibration slope, each with analytical or optional pair-level bootstrap confidence intervals.
 }
 \seealso{
 Useful links:

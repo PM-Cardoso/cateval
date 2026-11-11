@@ -2,34 +2,65 @@
 % Please edit documentation in R/plot_optimal_drugs.R
 \name{plot_optimal_drugs}
 \alias{plot_optimal_drugs}
-\title{Plotting optimal drug combinations}
+\title{Plot How Many Treatments Are Near-Best, and Which}
 \usage{
-plot_optimal_drugs(data, groups, plot = TRUE)
+plot_optimal_drugs(
+  data,
+  groups,
+  plot = TRUE,
+  title_count = "Number of near-best treatments",
+  title_sets = "Most common near-best sets",
+  subtitle = NULL
+)
 }
 \arguments{
-\item{data}{A character vector where each element is a comma-separated string of drugs considered optimal for an individual.}
+\item{data}{A character vector with one element per patient: the
+comma-separated set of near-best treatments, e.g. \code{"A,C"} (the
+\code{*_drug_name} column from \code{get_best_drugs(tolerance = ...)}).}
 
-\item{groups}{A named list where each name represents a category (e.g., "1-drug combination") and each value is a vector of drug counts (e.g., 1, 2, 4:5).}
+\item{groups}{A named list. Each name labels a panel of the second chart
+(e.g. \code{"1 treatment"}) and each value gives the set sizes it covers
+(e.g. \code{1}, \code{2} or \code{3:5}).}
 
-\item{plot}{Logical. If TRUE (default), returns a combined patchwork plot. If FALSE, returns a list of summary data frames.}
+\item{plot}{Logical. If \code{TRUE} (default), return the combined plot. If
+\code{FALSE}, return the two summary tables instead.}
+
+\item{title_count, title_sets}{Titles of the two charts.}
+
+\item{subtitle}{Optional subtitle for the first chart, e.g. to state the
+tolerance used.}
 }
 \value{
-A patchwork object combining two ggplot2 bar plots side-by-side.
+If \code{plot = TRUE}, a patchwork object combining the two ggplot2
+charts. If \code{plot = FALSE}, a list with \code{overall} (patients by
+number of near-best treatments) and \code{breakdown} (patients by
+treatment set and group).
 }
 \description{
-This function generates a side-by-side bar plot visualizing:
+Summarises the sets of near-best treatments produced by
+\code{\link{get_best_drugs}} with a \code{tolerance}, and draws two bar
+charts side by side:
 \enumerate{
-\item The proportion of individuals with 1 to 5 optimal drugs identified.
-\item The most frequent drug combinations by category (e.g., 1-drug, 2-drug).
+\item the share of patients with 1, 2, 3, ... treatments within the
+tolerance of their best predicted outcome;
+\item the most common treatment sets, split into the groups given in
+\code{groups} (for example single treatments vs pairs).
 }
 }
 \examples{
-groups <- list(
-  "1-drug combination" = 1,
-  "2-drug combinations" = 2,
-  "3-drug combinations" = 3,
-  "3/4/5-drug combinations" = 4:5
+near_best <- get_best_drugs(
+  cateval_example,
+  column_names   = c("pred_A", "pred_B", "pred_C"),
+  final_var_name = "pred_",
+  tolerance      = 2
 )
-plot_optimal_drugs(c("SGLT2,DPP4,GLP1", "GLP1", "TZD,DPP4"), groups)
+sets <- near_best$pred_within_2_of_best_drug_name
+head(sets)
+
+plot_optimal_drugs(
+  sets,
+  groups   = list("1 treatment" = 1, "2 treatments" = 2, "3 treatments" = 3),
+  subtitle = "Treatments within 2 points of each patient's best prediction"
+)
 
 }

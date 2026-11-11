@@ -45,10 +45,19 @@ zero) and the calibration slope (how much the observed benefit changes per
 unit of predicted benefit; 1 indicates perfect calibration).
 }
 \examples{
-\dontrun{
+matched <- match_benefit_pairs(
+  cateval_example,
+  drug_var     = "treatment",
+  outcome_var  = "outcome",
+  pred_cols    = c("pred_A", "pred_B", "pred_C"),
+  matching_var = c("age", "sex", "baseline", "marker"),
+  seed         = 1
+)
+
 benefit_citl_slope(matched$combined)
-benefit_citl_slope(matched$combined, bootstrap = TRUE, boot_seed = 42)
-}
+
+# bootstrap intervals
+benefit_citl_slope(matched$combined, bootstrap = TRUE, n_boot = 200, boot_seed = 1)
 
 }
 \seealso{

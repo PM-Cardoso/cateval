@@ -84,11 +84,24 @@ example the largest number of groups for which every group still has enough
 pairs), which is why \code{n_groups} is returned alongside \code{group}.
 }
 \examples{
-\dontrun{
+matched <- match_benefit_pairs(
+  cateval_example,
+  drug_var     = "treatment",
+  outcome_var  = "outcome",
+  pred_cols    = c("pred_A", "pred_B", "pred_C"),
+  matching_var = c("age", "sex", "baseline", "marker"),
+  seed         = 1
+)
+
+# ten groups of predicted benefit
 benefit_by_group(matched$combined, cal_groups = 10)
-benefit_by_group(matched$combined, cal_groups = c(3, 5, 10))
-benefit_by_group(matched$combined, cal_groups = 10, bootstrap = TRUE, boot_seed = 42)
-}
+
+# several groupings at once, told apart by n_groups
+benefit_by_group(matched$combined, cal_groups = c(3, 5))
+
+# bootstrap intervals
+benefit_by_group(matched$combined, cal_groups = 5,
+                 bootstrap = TRUE, n_boot = 200, boot_seed = 1)
 
 }
 \seealso{

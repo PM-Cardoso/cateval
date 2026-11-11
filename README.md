@@ -1,237 +1,97 @@
 # cateval
 
-**R package for validating Conditional Average Treatment Effects (CATE)**
+<!-- badges: start -->
 
-## Overview
+<!-- badges: end -->
 
-`cateval` provides a comprehensive suite of functions to validate and analyze conditional average treatment effects (CATE) from causal inference studies. Whether you're comparing two treatments or analyzing multiple treatment scenarios, this package offers tools for:
+**Check whether a treatment-selection model gives the right advice.**
 
-- **Estimating and validating** heterogeneous treatment effects
-- **Calibrating** predictions for subgroup analysis
-- **Identifying optimal treatments** for individual patients or populations
-- **Assessing treatment benefit** across treatment arms
-- **Visualizing** treatment comparisons and outcomes
+A treatment-selection model predicts each patient's outcome on every
+available treatment and recommends the one with the best prediction. cateval
+checks those predictions against the outcomes patients had, using data you
+already hold: the treatment each patient received, their outcome, and the
+model's predictions.
 
-The package is designed for both **pairwise comparisons** (two treatments) and **multi-arm studies** (multiple treatments), making it flexible for various study designs.
+It answers two questions:
 
-## Key Features
+- **Overall benefit.** Do patients who received the recommended treatment do
+  better than similar patients who did not, and by as much as the model
+  predicted?
+- **Pairwise effects.** For each pair of treatments, do the observed
+  differences match the predicted ones?
 
-### Overall-benefit calibration
-
-- **`match_benefit_pairs()`** — Match concordant patients (received the recommended drug) to discordant patients, in both directions, returning the concordant, discordant and combined matched populations for inspection
-- **`benefit_by_group()`** — Mean observed benefit by group of predicted benefit (the calibration-plot data)
-- **`benefit_by_drug()`** — The same, split by the drug class received by the index (matched) patient of each pair
-- **`benefit_overall()`** — Mean observed benefit of following the model
-- **`benefit_citl_slope()`** — Calibration-in-the-large and calibration slope of predicted benefit
-
-Each summary reports analytical confidence intervals by default, or optional pair-level bootstrap intervals. Plotting is left to the user (see the worked example) so the calibration plot can be built with whatever detail the analysis calls for — this package only produces the underlying group and pair-level numbers.
-
-### Pairwise drug-class calibration
-
-- **`pairwise_calibration()`** — Predicted vs observed treatment effects across all drug pairs
-- **`pairwise_calibration_pair()`** — The underlying single-pair calibration engine
-
-Optional covariate matching (`matching = TRUE`) is performed once per drug pair and
-reused across every `cal_groups` setting. Set `return_matched = TRUE` to get the
-matched cohort and `matchit` object back for balance checking, and
-`bootstrap = TRUE` for percentile bootstrap intervals in place of the Wald intervals.
-
-### Customising the matching
-
-Both workflows use `MatchIt` and default to 1:1 nearest-neighbour Mahalanobis matching
-with replacement. `method`, `distance`, `replace`, `ratio`, `caliper`, `std.caliper` and
-`seed` are all available, and `match_args` passes any other `MatchIt::matchit()` argument
-straight through:
-
-``` r
-match_benefit_pairs(
-  ...,
-  replace    = FALSE,                  # each control used at most once
-  ratio      = 2,                      # two controls per treated patient
-  caliper    = c(prehba1c = 0.4),      # in SD units by default
-  match_args = list(m.order = "random")
-)
-```
-
-`match_benefit_pairs()` matches twice — once with concordant patients as the
-treated group and once with the roles reversed — and the two directions can be
-configured separately. `match_args` applies to both; `match_args_conc` and
-`match_args_disc` are layered on top of it for one direction only:
-
-``` r
-match_benefit_pairs(
-  ...,
-  match_args      = list(m.order = "random"),   # both directions
-  match_args_disc = list(replace = FALSE,       # discordant direction only
-                         ratio   = 2)
-)
-```
-
-Order of precedence, later winning: package defaults → the named arguments above
-→ `match_args` → that direction's own list. Since `modifyList()` treats `NULL` as
-removal, `match_args_disc = list(caliper = NULL)` drops the caliper for the
-discordant direction alone.
-
-Matching is always exact on the predicted-best drug and always anti-exact on the
-received drug — this is what makes a matched pair interpretable as "followed the
-model vs did not". Supplying `exact` or `antiexact` through `match_args` adds to
-those constraints rather than replacing them.
-
-In `pairwise_calibration()`, patients predicted to do better on the first drug of
-a pair are matched to patients predicted to do better on the second, and the
-match is likewise always anti-exact on the received drug, so every matched set
-compares patients who took different drugs. The same layering applies (named
-arguments, then `match_args`, then the protected constraint), and all matching
-arguments refer to columns by their original names.
-
-In both workflows `drug_var` and `outcome_var` cannot be used as matching or
-adjustment variables, and only pair-matching methods (`"nearest"`, `"optimal"`,
-`"genetic"`) are supported, since each treated patient must be linked to its own
-control(s). With `ratio > 1` a treated patient contributes one row per matched
-control, all weighted equally — see `?match_benefit_pairs`.
-
-### Prediction columns and drug names
-
-`cateval` makes no assumption about what the treatments are called — drug
-classes, molecules, trial arms or numeric codes all work, as long as the
-received-treatment column and the prediction columns refer to the same set.
-Each prediction column is linked to a treatment name as it appears in
-`drug_var`:
-
-- `pairwise_calibration()` takes them by position (`drugs[i]` ↔
-  `prediction_vars[i]`), so any column names work.
-- `match_benefit_pairs()` infers the link from the treatments observed in
-  `drug_var`: any prefix (`pred.A`, `yhat_outcome_A`) or suffix (`A_pred`)
-  works, upper/lower-case differences are tolerated, and a treatment that no
-  patient received is read from the naming pattern of the other columns. For
-  anything else, say it directly:
-
-``` r
-match_benefit_pairs(
-  ...,
-  pred_cols = c("score_a", "score_b", "score_c"),
-  drugs     = c("Drug A", "Drug B", "Drug C")     # or a named pred_cols vector
-)
-```
-
-The mapping used is returned in the `drugs` element of the result (and printed
-whenever it had to be inferred indirectly). Names may contain spaces, hyphens,
-dots, brackets or non-ASCII characters, but not commas.
-
-### Predicted-best drug utilities
-
-- **`get_best_drugs()`** — Identify the recommended drug (or the near-best set) for each patient
-- **`get_ranked_or_tolerant_drugs()`** — Rank or select treatments meeting a tolerance threshold
-- **`plot_optimal_drugs()`** — Visualise the distribution of recommended drug combinations
-
-### Built-in Support for
-
-- Continuous outcomes
-- Matching-based causal inference (via `MatchIt` integration)
-- Publication-ready visualizations with `ggplot2`
-- Tidy data workflows with `dplyr` and `tidyr`
-
-## Documentation website
-
--   Full API reference and examples: <https://PM-Cardoso.github.io/cateval/>
+cateval works with any continuous outcome where lower is better, any number of
+treatments and any naming scheme for your columns.
 
 ## Installation
 
-Install the latest development version from GitHub:
-
-``` r
-if (!require("devtools")) {
-  install.packages("devtools")
-}
-devtools::install_github("PM-Cardoso/cateval", dependencies = TRUE, build_vignettes = FALSE)
+```r
+# install.packages("remotes")
+remotes::install_github("PM-Cardoso/cateval")
 ```
 
-## Quick Start
+## Example
+
+The package includes `cateval_example`, a simulated cohort of 3000 patients
+on three treatments.
 
 ```r
 library(cateval)
 
-drugs <- c("SGLT2", "GLP1", "DPP4", "SU", "TZD")
-
-# Pairwise heterogeneous treatment effect calibration across all drug pairs
-pairwise_results <- pairwise_calibration(
-  data            = your_data,
-  drug_var        = "drugclass",
-  drugs           = drugs,
-  prediction_vars = paste0("pred.", drugs),
-  outcome_var     = "posthba1cfinal",
-  cal_groups      = c(3, 5, 10),
-  adjustment_var  = c("agetx", "sex", "prehba1c")
-)
-
-# Overall (concordant vs discordant) benefit calibration
-# 1. match, keeping the matched populations for inspection
+# pair patients who received the recommended treatment with similar
+# patients who did not
 matched <- match_benefit_pairs(
-  data         = your_data,
-  drug_var     = "drugclass",
-  outcome_var  = "posthba1cfinal",
-  pred_cols    = paste0("pred.", drugs),
-  matching_var = c("agetx", "sex", "prehba1c"),
-  match.exact  = "sex",
-  caliper      = c(prehba1c = 0.4),
-  seed         = 19840503
+  cateval_example,
+  drug_var     = "treatment",
+  outcome_var  = "outcome",
+  pred_cols    = c("pred_A", "pred_B", "pred_C"),
+  matching_var = c("age", "sex", "baseline", "marker"),
+  seed         = 1
 )
 
-# 2. summarise (set bootstrap = TRUE for pair-level bootstrap intervals);
-# cal_groups can be a vector, e.g. c(3, 5, 10), stacked with an n_groups column
-by_group <- benefit_by_group(matched$combined, cal_groups = 10)
-overall  <- benefit_overall(matched$combined)
-slope    <- benefit_citl_slope(matched$combined)
-
-# 3. plot the calibration yourself: group means + identity line + a LOESS
-# curve fitted on the group point estimates
-library(ggplot2)
-ggplot(by_group, aes(x = pred.benefit, y = obs.benefit)) +
-  geom_abline(intercept = 0, slope = 1, colour = "red", linetype = "dashed") +
-  geom_smooth(method = "loess", se = TRUE, span = 1, colour = "blue") +
-  geom_errorbar(aes(ymin = lower.ci, ymax = upper.ci), width = 0.2) +
-  geom_point(size = 2.5)
-
-# Identify the predicted-optimal treatment(s) for each patient: every drug
-# within 3 units of the best prediction
-best_drugs <- get_best_drugs(
-  data           = your_data,
-  tolerance      = 3,
-  column_names   = paste0("pred.", drugs),
-  final_var_name = "pred."
-)
-
-# Visualise the distribution of predicted-optimal drug combinations
-plot_optimal_drugs(
-  data   = best_drugs$pred.within_3_of_best_drug_name,
-  groups = list("1-drug" = 1, "2-drug" = 2, "3+-drug" = 3:5)
-)
+benefit_overall(matched$combined)          # average benefit of following the model
+benefit_by_group(matched$combined, 10)     # observed vs predicted, in 10 groups
+benefit_citl_slope(matched$combined)       # calibration in the large and slope
 ```
+
+Plot the grouped results against the diagonal to compare predicted and
+observed benefit:
+
+<p align="center">
+  <img src="man/figures/README-calibration.png" alt="Observed against predicted benefit in ten groups, with 95% confidence intervals and a diagonal line of perfect agreement" width="460">
+</p>
+
+In this simulation the model ranks patients well, but overstates the largest
+benefits. The [worked example](https://PM-Cardoso.github.io/cateval/articles/worked-example.html)
+covers the full analysis, with the plotting code and the pairwise
+comparisons.
+
+## Functions
+
+| Task                                               | Functions                                                                                                                 |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Find the recommended treatment                     | `get_best_drugs()`, `plot_optimal_drugs()`                                                                            |
+| Measure the benefit of following the model         | `match_benefit_pairs()`, `benefit_overall()`, `benefit_by_group()`, `benefit_citl_slope()`, `benefit_by_drug()` |
+| Check the predicted differences between treatments | `pairwise_calibration()`, `pairwise_calibration_pair()`                                                               |
+
+Full documentation: [https://PM-Cardoso.github.io/cateval/](https://PM-Cardoso.github.io/cateval/)
 
 ## Citation
 
-If you use `cateval` in your research, please cite:
-
-```
+```bibtex
 @software{cardoso2024cateval,
   author = {Cardoso, Pedro},
-  title = {cateval: Validation of Conditional Average Treatment Effects},
-  year = {2024},
-  url = {https://github.com/PM-Cardoso/cateval}
+  title  = {cateval: Validation of Conditional Average Treatment Effects},
+  year   = {2024},
+  url    = {https://github.com/PM-Cardoso/cateval}
 }
 ```
 
-## Author
+## Getting help
 
-**Pedro Cardoso**  
-University of Exeter  
-Email: p.cardoso@exeter.ac.uk  
-ORCID: [0000-0002-1014-9058](https://orcid.org/0000-0002-1014-9058)
+Report bugs or ask questions on
+[GitHub Issues](https://github.com/PM-Cardoso/cateval/issues).
 
 ## License
 
-GPL (≥ 3). See [LICENSE.md](LICENSE.md) for details.
-
-## Contributing
-
-Found a bug or have suggestions? Please open an issue on [GitHub Issues](https://github.com/PM-Cardoso/cateval/issues).
+GPL (>= 3). See [LICENSE.md](LICENSE.md).

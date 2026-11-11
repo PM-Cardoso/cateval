@@ -1,4 +1,4 @@
-#' Estimate Heterogeneous Treatment Effects Across Calibration Groups
+#' Pairwise Calibration for One Pair of Treatments
 #'
 #' Estimates the treatment effect between two drugs within groups of predicted
 #' benefit. Patients are ordered by their predicted benefit, split into equal-sized
@@ -30,7 +30,7 @@
 #' @param match.exact Optional character vector. Variables for exact matching. Must not include `drug_var`, since matched patients are always required to have received different drugs.
 #' @param match.antiexact Optional character vector. Additional variables for anti-exact matching. The received drug is always included (see Details).
 #' @param caliper Optional named numeric vector passed to \code{MatchIt::matchit}
-#'   (e.g. \code{c(prehba1c = 0.4)}); interpreted in standard-deviation units by
+#'   (e.g. \code{c(baseline = 0.4)}); interpreted in standard-deviation units by
 #'   default (see \code{std.caliper}).
 #' @param std.caliper Logical. If \code{TRUE} (default), \code{caliper} is read
 #'   in standard-deviation units; if \code{FALSE}, in the variable's own units.
@@ -129,45 +129,33 @@
 #' @importFrom MatchIt matchit get_matches
 #'
 #' @examples
-#' \dontrun{
-#' # Basic usage without matching or adjustment
-#' result <- pairwise_calibration_pair(
-#'   data = test_data,
-#'   drug_var = "drugclass",
-#'   drugs = c("SGLT2", "DPP4"),
-#'   benefit_var = "benefit_score",
-#'   outcome_var = "posthba1cfinal",
-#'   cal_groups = 5
+#' # predicted difference A minus B (negative = A predicted better)
+#' ab <- subset(cateval_example, treatment %in% c("A", "B"))
+#' ab$benefit <- ab$pred_A - ab$pred_B
+#'
+#' pairwise_calibration_pair(
+#'   ab,
+#'   drug_var       = "treatment",
+#'   drugs          = c("A", "B"),
+#'   benefit_var    = "benefit",
+#'   outcome_var    = "outcome",
+#'   cal_groups     = 5,
+#'   adjustment_var = c("age", "sex", "baseline", "marker")
 #' )
 #'
-#' # With adjustment
-#' result_adj <- pairwise_calibration_pair(
-#'   data = test_data,
-#'   drug_var = "drugclass",
-#'   drugs = c("SGLT2", "DPP4"),
-#'   benefit_var = "benefit_score",
-#'   outcome_var = "posthba1cfinal",
-#'   cal_groups = 3,
-#'   adjustment_var = c("age", "bmi", "sex")
+#' # with matching, a caliper and a seed
+#' pairwise_calibration_pair(
+#'   ab,
+#'   drug_var     = "treatment",
+#'   drugs        = c("A", "B"),
+#'   benefit_var  = "benefit",
+#'   outcome_var  = "outcome",
+#'   cal_groups   = 3,
+#'   matching     = TRUE,
+#'   matching_var = c("age", "sex", "baseline", "marker"),
+#'   caliper      = c(baseline = 0.25),
+#'   seed         = 1
 #' )
-#'
-#' # With matching, a caliper and a seed, keeping the matched cohort
-#' result_match <- pairwise_calibration_pair(
-#'   data = test_data,
-#'   drug_var = "drugclass",
-#'   drugs = c("SGLT2", "DPP4"),
-#'   benefit_var = "benefit_score",
-#'   outcome_var = "posthba1cfinal",
-#'   cal_groups = 4,
-#'   matching = TRUE,
-#'   adjustment_var = c("age", "bmi", "sex"),
-#'   match.exact = "sex",
-#'   caliper = c(age = 0.25),
-#'   seed = 42,
-#'   return_matched = TRUE
-#' )
-#' plot(summary(result_match$matchit))
-#' }
 #'
 #' @export
 pairwise_calibration_pair <- function(data,

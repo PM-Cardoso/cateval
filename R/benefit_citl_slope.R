@@ -28,10 +28,19 @@
 #' @seealso \code{\link{match_benefit_pairs}}, \code{\link{benefit_by_group}}
 #'
 #' @examples
-#' \dontrun{
+#' matched <- match_benefit_pairs(
+#'   cateval_example,
+#'   drug_var     = "treatment",
+#'   outcome_var  = "outcome",
+#'   pred_cols    = c("pred_A", "pred_B", "pred_C"),
+#'   matching_var = c("age", "sex", "baseline", "marker"),
+#'   seed         = 1
+#' )
+#'
 #' benefit_citl_slope(matched$combined)
-#' benefit_citl_slope(matched$combined, bootstrap = TRUE, boot_seed = 42)
-#' }
+#'
+#' # bootstrap intervals
+#' benefit_citl_slope(matched$combined, bootstrap = TRUE, n_boot = 200, boot_seed = 1)
 #'
 #' @importFrom stats lm coef confint
 #' @importFrom boot boot

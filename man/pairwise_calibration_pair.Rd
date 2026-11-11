@@ -2,7 +2,7 @@
 % Please edit documentation in R/pairwise_calibration_pair.R
 \name{pairwise_calibration_pair}
 \alias{pairwise_calibration_pair}
-\title{Estimate Heterogeneous Treatment Effects Across Calibration Groups}
+\title{Pairwise Calibration for One Pair of Treatments}
 \usage{
 pairwise_calibration_pair(
   data,
@@ -55,7 +55,7 @@ pairwise_calibration_pair(
 \item{match.antiexact}{Optional character vector. Additional variables for anti-exact matching. The received drug is always included (see Details).}
 
 \item{caliper}{Optional named numeric vector passed to \code{MatchIt::matchit}
-(e.g. \code{c(prehba1c = 0.4)}); interpreted in standard-deviation units by
+(e.g. \code{c(baseline = 0.4)}); interpreted in standard-deviation units by
 default (see \code{std.caliper}).}
 
 \item{std.caliper}{Logical. If \code{TRUE} (default), \code{caliper} is read
@@ -182,44 +182,32 @@ they are reported. Setting \code{replace = FALSE} removes the dependence, at
 the cost of fewer and generally poorer-quality matches.
 }
 \examples{
-\dontrun{
-# Basic usage without matching or adjustment
-result <- pairwise_calibration_pair(
-  data = test_data,
-  drug_var = "drugclass",
-  drugs = c("SGLT2", "DPP4"),
-  benefit_var = "benefit_score",
-  outcome_var = "posthba1cfinal",
-  cal_groups = 5
+# predicted difference A minus B (negative = A predicted better)
+ab <- subset(cateval_example, treatment \%in\% c("A", "B"))
+ab$benefit <- ab$pred_A - ab$pred_B
+
+pairwise_calibration_pair(
+  ab,
+  drug_var       = "treatment",
+  drugs          = c("A", "B"),
+  benefit_var    = "benefit",
+  outcome_var    = "outcome",
+  cal_groups     = 5,
+  adjustment_var = c("age", "sex", "baseline", "marker")
 )
 
-# With adjustment
-result_adj <- pairwise_calibration_pair(
-  data = test_data,
-  drug_var = "drugclass",
-  drugs = c("SGLT2", "DPP4"),
-  benefit_var = "benefit_score",
-  outcome_var = "posthba1cfinal",
-  cal_groups = 3,
-  adjustment_var = c("age", "bmi", "sex")
+# with matching, a caliper and a seed
+pairwise_calibration_pair(
+  ab,
+  drug_var     = "treatment",
+  drugs        = c("A", "B"),
+  benefit_var  = "benefit",
+  outcome_var  = "outcome",
+  cal_groups   = 3,
+  matching     = TRUE,
+  matching_var = c("age", "sex", "baseline", "marker"),
+  caliper      = c(baseline = 0.25),
+  seed         = 1
 )
-
-# With matching, a caliper and a seed, keeping the matched cohort
-result_match <- pairwise_calibration_pair(
-  data = test_data,
-  drug_var = "drugclass",
-  drugs = c("SGLT2", "DPP4"),
-  benefit_var = "benefit_score",
-  outcome_var = "posthba1cfinal",
-  cal_groups = 4,
-  matching = TRUE,
-  adjustment_var = c("age", "bmi", "sex"),
-  match.exact = "sex",
-  caliper = c(age = 0.25),
-  seed = 42,
-  return_matched = TRUE
-)
-plot(summary(result_match$matchit))
-}
 
 }

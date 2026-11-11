@@ -1,0 +1,407 @@
+---
+title: "Worked example"
+description: >
+  A full validation of a treatment-selection model on simulated data, using
+  every function in cateval.
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.2,
+  dpi = 150,
+  out.width = "100%",
+  dev = "ragg_png"
+)
+options(pillar.print_min = 6, pillar.width = 90)
+```
+
+A treatment-selection model predicts each patient's outcome on every
+available treatment and recommends the one with the best prediction. Before
+you rely on it, you need two answers:
+
+1. Do patients who receive the recommended treatment do better?
+2. Are the predicted differences between treatments the right size?
+
+cateval answers both from data you already hold: the treatment each patient
+received, their outcome, and the model's predictions. This example uses
+`cateval_example`, a simulated cohort that comes with the package.
+
+```{r packages, message = FALSE}
+library(cateval)
+library(ggplot2)
+library(dplyr)
+```
+
+## The data
+
+```{r data}
+head(cateval_example)
+```
+
+Each row is one patient. `treatment` is the treatment they received (`A`, `B`
+or `C`), `outcome` is their score after treatment, and `pred_A`, `pred_B` and
+`pred_C` hold the model's predicted outcome on each treatment. **Lower is
+better** for the outcome and for the predictions; cateval assumes this
+throughout.
+
+The simulation has a known answer. Treatment `B` works best for patients with
+a high `marker`, and `C` works best for younger patients. The model has learned
+this, but it overstates the size of the differences by about 25%. A good
+validation should find both things.
+
+Treatment choice depended on age and marker, so the three groups are not
+alike at the start:
+
+```{r groups}
+cateval_example |>
+  group_by(treatment) |>
+  summarise(n = n(), age = mean(age), marker = mean(marker), baseline = mean(baseline))
+```
+
+Comparing raw outcomes between groups would mix the effect of treatment with
+these differences. Each analysis below matches or adjusts for them.
+
+### A shared look for the plots
+
+cateval returns tables, and you draw the plots. The plots below share one
+small theme and one colour per treatment:
+
+```{r theme}
+theme_cateval <- theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_line(colour = "#e1e0d9", linewidth = 0.3),
+    axis.text        = element_text(colour = "#52514e"),
+    axis.title       = element_text(colour = "#52514e"),
+    plot.title       = element_text(face = "bold"),
+    strip.text       = element_text(face = "bold", hjust = 0)
+  )
+
+treatment_colours <- c(A = "#2a78d6", B = "#eb6834", C = "#1baf7a")
+```
+
+## 1. Recommended treatments
+
+`get_best_drugs()` adds the treatment with the lowest prediction to each row.
+`final_var_name` does two jobs: it names the new columns, and cateval removes it
+from the prediction column names to get the treatment names (`pred_A` becomes
+`A`).
+
+```{r best}
+best <- get_best_drugs(
+  cateval_example,
+  column_names   = c("pred_A", "pred_B", "pred_C"),
+  final_var_name = "pred_"
+)
+
+table(recommended = best$pred_rank1_drug_name)
+```
+
+Each treatment is the top choice for about a third of patients. Often the top
+two predictions sit close together, though. With `tolerance`, you get every
+treatment whose prediction lies within that distance of the best one, and
+`plot_optimal_drugs()` summarises those sets:
+
+```{r near-best, fig.height = 3.6}
+near_best <- get_best_drugs(
+  cateval_example,
+  column_names   = c("pred_A", "pred_B", "pred_C"),
+  final_var_name = "pred_",
+  tolerance      = 2
+)
+
+plot_optimal_drugs(
+  near_best$pred_within_2_of_best_drug_name,
+  groups   = list("1 treatment" = 1, "2 treatments" = 2, "3 treatments" = 3),
+  subtitle = "Within 2 points of each patient's best prediction"
+)
+```
+
+For `r scales::percent(mean(!grepl(",", near_best$pred_within_2_of_best_drug_name)))`
+of patients, one treatment stands clear of the others. The rest have two or
+three options that the model rates within 2 points of each other.
+
+## 2. The benefit of following the model
+
+Call a patient **concordant** if they received the treatment the model
+recommends for them, and **discordant** if they received a different one.
+If the model is useful, concordant patients should do better. A raw comparison
+would be unfair, because concordant and discordant patients differ in other
+ways. `match_benefit_pairs()` pairs each concordant patient with a similar
+discordant patient instead:
+
+- both patients have the same recommended treatment (exact match),
+- they received different treatments (always enforced),
+- they are close on the matching variables (Mahalanobis distance).
+
+```{r match}
+matched <- match_benefit_pairs(
+  cateval_example,
+  drug_var     = "treatment",
+  outcome_var  = "outcome",
+  pred_cols    = c("pred_A", "pred_B", "pred_C"),
+  matching_var = c("age", "sex", "baseline", "marker"),
+  seed         = 1
+)
+
+sapply(matched[c("concordant", "discordant", "combined")], nrow)
+```
+
+The function matches in both directions. `concordant` holds the pairs built
+around concordant patients, `discordant` the pairs built around discordant
+patients, and `combined` pools the two without counting a pair twice. The
+summaries below use `combined`.
+
+cateval linked each prediction column to its treatment using the column names
+and the values in `treatment`. The result is stored with the pairs:
+
+```{r drugs}
+matched$drugs
+```
+
+If your columns follow a pattern cateval cannot read, pass `drugs = c(...)` in
+the same order as `pred_cols`.
+
+### Check the matching
+
+`matched$matchit` holds the MatchIt objects, so you can check balance with
+MatchIt's tools. The standardised mean difference (SMD) compares the two sides
+of the pairs on each variable. Values near zero after matching mean the paired
+patients are alike; a common rule of thumb asks for less than 0.1:
+
+```{r balance}
+bal <- summary(matched$matchit$concordant)
+round(cbind(
+  before = bal$sum.all[, "Std. Mean Diff."],
+  after  = bal$sum.matched[, "Std. Mean Diff."]
+)[c("age", "baseline", "marker", "sexFemale"), ], 3)
+```
+
+`plot(bal)` draws the same numbers as a love plot. It also lists cateval's
+internal matching variables (the recommended treatment, which is matched
+exactly, and the received treatment, which always differs).
+
+### The headline number
+
+Each pair gives an **observed benefit**: the discordant patient's outcome minus
+the concordant patient's. A positive value means the patient on the
+recommended treatment did better. The average over all pairs is the benefit of
+following the model:
+
+```{r overall}
+overall <- benefit_overall(matched$combined)
+overall
+```
+
+Patients who received the recommended treatment did
+`r round(overall$observed, 1)` points better
+(95% CI `r round(overall$lower.ci, 1)` to `r round(overall$upper.ci, 1)`)
+than similar patients who did not.
+
+### Calibration of the predicted benefit
+
+Each pair also has a **predicted benefit**: the model's expected advantage of
+the recommended treatment over the treatment the discordant patient received. `benefit_by_group()` splits the pairs into groups of predicted
+benefit and gives the mean observed benefit in each:
+
+```{r by-group}
+by_group <- benefit_by_group(matched$combined, cal_groups = 10)
+by_group
+```
+
+If the model is well calibrated, each group's observed benefit matches its
+predicted benefit, so the points fall on the diagonal:
+
+```{r calibration-plot, fig.width = 5.5, fig.height = 5, out.width = "75%", fig.align = "center"}
+# the same range on both axes, wide enough for every interval
+lims <- range(0, by_group$pred.benefit, by_group$lower.ci, by_group$upper.ci)
+
+ggplot(by_group, aes(x = pred.benefit, y = obs.benefit)) +
+  geom_abline(intercept = 0, slope = 1, colour = "#898781") +
+  geom_errorbar(aes(ymin = lower.ci, ymax = upper.ci), width = 0, colour = "#2a78d6") +
+  geom_point(size = 2.5, colour = "#2a78d6") +
+  coord_equal(xlim = lims, ylim = lims) +
+  labs(
+    title = "Predicted vs observed benefit",
+    x = "Predicted benefit (mean per group)",
+    y = "Observed benefit (mean, 95% CI)"
+  ) +
+  theme_cateval
+```
+
+The model ranks patients well: groups with a larger predicted benefit gain
+more. In the top groups the points sit below the line, so patients there gain
+less than the model promises.
+
+Notes on this plot:
+
+- The grey line marks perfect agreement. Equal axis scales (`coord_equal()`)
+  keep its slope at 45 degrees, so distances from it are honest.
+- `cal_groups` sets the number of groups. More groups show more detail, with
+  wider intervals. You can pass several values at once, for example
+  `cal_groups = c(5, 10)`; the `n_groups` column then tells them apart.
+- A group with fewer than two pairs gets `NA` interval bounds and a warning.
+
+### Calibration in the large and calibration slope
+
+`benefit_citl_slope()` sums up the plot in two numbers, from a regression of
+observed on predicted benefit across all pairs:
+
+```{r citl}
+cal <- benefit_citl_slope(matched$combined)
+cal
+```
+
+- **Calibration in the large** (the intercept) is the observed benefit when the
+  model predicts none. Near 0 is good; here it is
+  `r round(cal$estimate[1], 2)`.
+- **Calibration slope** is the rise in observed benefit per unit of
+  predicted benefit. A slope of 1 is ideal. Here it is
+  `r round(cal$estimate[2], 2)`: patients gain about
+  `r round(100 * cal$estimate[2])`% of the predicted benefit. The simulation
+  inflated the differences by 25%, so the true slope is 1 / 1.25 = 0.8, and the
+  analysis recovers it.
+
+### By treatment
+
+`benefit_by_drug()` repeats the grouped summary for each treatment. Each pair
+belongs to the treatment of its index patient (the patient the match was built
+around). Pass the full list in `drugs` so every treatment appears in a fixed
+order:
+
+```{r by-drug, fig.height = 3.2}
+by_drug <- benefit_by_drug(matched$combined, drugs = c("A", "B", "C"), cal_groups = 5)
+by_drug <- mutate(by_drug, panel = paste("Treatment", index_drug))
+
+ggplot(by_drug, aes(x = pred.benefit, y = obs.benefit, colour = index_drug)) +
+  geom_abline(intercept = 0, slope = 1, colour = "#898781") +
+  geom_errorbar(aes(ymin = lower.ci, ymax = upper.ci), width = 0) +
+  geom_point(size = 2.2) +
+  facet_wrap(~ panel) +
+  scale_colour_manual(values = treatment_colours, guide = "none") +
+  scale_x_continuous(breaks = c(0, 3, 6)) +
+  scale_y_continuous(breaks = c(0, 3, 6)) +
+  coord_equal(xlim = c(-2, 8), ylim = c(-2, 8)) +
+  labs(x = "Predicted benefit", y = "Observed benefit") +
+  theme_cateval +
+  theme(panel.spacing = unit(1.5, "lines"))
+```
+
+The pattern holds for all three treatments, so no single treatment drives the
+overstatement.
+
+## 3. Pairwise comparisons: A vs B, A vs C, B vs C
+
+The overall benefit looks at the recommended treatment against everything
+else. `pairwise_calibration()` looks at each pair of treatments in turn. For
+the pair (A, B):
+
+- the **predicted difference** is `pred_A - pred_B`. Negative values mean the
+  model expects A to do better;
+- patients are split into groups by that predicted difference;
+- in each group, a regression of outcome on treatment (adjusted for the
+  variables in `adjustment_var`) estimates the **observed difference**, A
+  minus B.
+
+```{r pairwise}
+pairwise <- pairwise_calibration(
+  cateval_example,
+  drug_var        = "treatment",
+  drugs           = c("A", "B", "C"),
+  prediction_vars = c("pred_A", "pred_B", "pred_C"),
+  outcome_var     = "outcome",
+  cal_groups      = 5,
+  adjustment_var  = c("age", "sex", "baseline", "marker")
+)
+
+pairwise |>
+  select(drug1, drug2, mean, coef, coef_low, coef_high, n_drug1, n_drug2) |>
+  head()
+```
+
+`mean` is the mean predicted difference in each group and `coef` the observed
+one, with its interval in `coef_low` and `coef_high`. Both use the same scale,
+so the diagonal again marks perfect calibration:
+
+```{r pairwise-plot, fig.height = 3.2}
+pairwise <- mutate(pairwise, pair = paste(drug1, "vs", drug2))
+
+ggplot(pairwise, aes(x = mean, y = coef)) +
+  geom_hline(yintercept = 0, colour = "#e1e0d9") +
+  geom_vline(xintercept = 0, colour = "#e1e0d9") +
+  geom_abline(intercept = 0, slope = 1, colour = "#898781") +
+  geom_errorbar(aes(ymin = coef_low, ymax = coef_high), width = 0, colour = "#2a78d6") +
+  geom_point(size = 2.2, colour = "#2a78d6") +
+  facet_wrap(~ pair) +
+  coord_equal(xlim = c(-7, 7), ylim = c(-7, 7)) +
+  theme(panel.spacing = unit(1.5, "lines")) +
+  labs(
+    x = "Predicted difference (first minus second)",
+    y = "Observed difference"
+  ) +
+  theme_cateval
+```
+
+Bottom-left points are patients for whom the model expects the first treatment
+to win; top-right, the second. All three panels rise with the predictions, and
+the outer groups again fall short of the diagonal.
+
+The comparison can also match before it estimates. With `matching = TRUE`,
+patients predicted to do better on the first treatment are matched to patients
+predicted to do better on the second, always across the two treatments. Add
+`return_matched = TRUE` to get the matched cohorts back for a balance check.
+
+## 4. Options worth knowing
+
+**Bootstrap intervals.** Every summary gives analytical intervals by default.
+Set `bootstrap = TRUE` for percentile bootstrap intervals that resample the
+matched pairs:
+
+```{r bootstrap}
+benefit_overall(matched$combined, bootstrap = TRUE, n_boot = 500, boot_seed = 1)
+```
+
+**Matching settings.** Matching defaults to 1:1 nearest-neighbour Mahalanobis
+matching with replacement. You can change it with `replace`, `ratio`,
+`caliper` and `method`, or pass any `MatchIt::matchit()` argument through
+`match_args`. `match_benefit_pairs()` also takes `match_args_conc` and
+`match_args_disc` to set the two directions apart:
+
+```{r options, eval = FALSE}
+match_benefit_pairs(
+  cateval_example, "treatment", "outcome",
+  pred_cols       = c("pred_A", "pred_B", "pred_C"),
+  matching_var    = c("age", "sex", "baseline", "marker"),
+  match.exact     = "sex",                    # same sex within each pair
+  caliper         = c(baseline = 0.25),       # in standard deviations
+  match_args_disc = list(replace = FALSE),    # one direction only
+  seed            = 1
+)
+```
+
+**Read the intervals with care.** With replacement (the default), one control
+patient can appear in several pairs. Neither interval accounts for that, so
+both run a little narrow when controls are reused often. `replace = FALSE`
+removes the issue at the cost of fewer, less close matches.
+
+**Your own data.** Column and treatment names can be anything: `drug_var`,
+`outcome_var` and the prediction columns are all arguments. The outcome must
+be continuous, with lower values better. If higher is better for your outcome,
+multiply the outcome and the predictions by -1 first.
+
+## Functions used
+
+| Step | Function | Returns |
+|---|---|---|
+| Recommended treatment | `get_best_drugs()` | the best (or near-best) treatment per patient |
+| | `plot_optimal_drugs()` | a chart of near-best treatment sets |
+| Overall benefit | `match_benefit_pairs()` | matched concordant/discordant pairs |
+| | `benefit_overall()` | mean benefit of following the model |
+| | `benefit_by_group()` | observed vs predicted benefit by group |
+| | `benefit_citl_slope()` | calibration in the large and slope |
+| | `benefit_by_drug()` | the grouped summary for each treatment |
+| Pairwise effects | `pairwise_calibration()` | observed vs predicted difference for every pair |
+| | `pairwise_calibration_pair()` | the same for one pair |

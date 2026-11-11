@@ -65,11 +65,24 @@
 #' @seealso \code{\link{match_benefit_pairs}}, \code{\link{benefit_by_drug}}
 #'
 #' @examples
-#' \dontrun{
+#' matched <- match_benefit_pairs(
+#'   cateval_example,
+#'   drug_var     = "treatment",
+#'   outcome_var  = "outcome",
+#'   pred_cols    = c("pred_A", "pred_B", "pred_C"),
+#'   matching_var = c("age", "sex", "baseline", "marker"),
+#'   seed         = 1
+#' )
+#'
+#' # ten groups of predicted benefit
 #' benefit_by_group(matched$combined, cal_groups = 10)
-#' benefit_by_group(matched$combined, cal_groups = c(3, 5, 10))
-#' benefit_by_group(matched$combined, cal_groups = 10, bootstrap = TRUE, boot_seed = 42)
-#' }
+#'
+#' # several groupings at once, told apart by n_groups
+#' benefit_by_group(matched$combined, cal_groups = c(3, 5))
+#'
+#' # bootstrap intervals
+#' benefit_by_group(matched$combined, cal_groups = 5,
+#'                  bootstrap = TRUE, n_boot = 200, boot_seed = 1)
 #'
 #' @importFrom dplyr group_by summarise mutate n bind_rows select
 #' @importFrom stats quantile sd qt
@@ -122,7 +135,7 @@ benefit_by_group <- function(pairs,
   alpha <- (1 - conf) / 2
 
   # ---- Fixed group boundaries from predicted benefit ----
-  # When predicted benefit is heavily tied (e.g. within a small drug-class
+  # When predicted benefit is heavily tied (e.g. within a small treatment
   # subset) some quantiles coincide, which would give non-unique breakpoints and
   # fewer groups than requested. Keep the distinct boundaries, derive the actual
   # number of groups from them, and warn if fewer groups were formed.

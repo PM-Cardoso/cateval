@@ -2,7 +2,7 @@
 % Please edit documentation in R/get_ranked_or_tolerant_drugs.R
 \name{get_ranked_or_tolerant_drugs}
 \alias{get_ranked_or_tolerant_drugs}
-\title{Get Ranked or Tolerance-Based Drug Recommendation}
+\title{Find the Best or Near-Best Treatments for One Patient}
 \usage{
 get_ranked_or_tolerant_drugs(
   row,
@@ -31,7 +31,7 @@ once per name, so it may sit anywhere in the name, e.g. a suffix such as
 \item{drugs}{Optional vector of drug names (character, factor or numeric
 codes), one per element of \code{column_names} and in the same order. Use this when the drug name cannot be
 recovered by removing a single piece of text from the column names (for
-example \code{c("hba1c_sglt2_m12", "hba1c_glp1_m12")}). Drug names must not
+example \code{c("score_a_month12", "score_b_month12")}). Drug names must not
 contain commas, since the tolerance output is comma-separated.}
 }
 \value{
@@ -45,20 +45,19 @@ A character vector with two named elements:
 This function identifies the drug(s) with the best (lowest) predicted outcome from a set of model predictions. It can return the nth-best drug or all drugs within a specified tolerance of the best drug.
 }
 \examples{
-\dontrun{
-row <- c(pred_A = 0.2, pred_B = 0.5, pred_C = 0.21)
-get_ranked_or_tolerant_drugs(
-  row,
-  rank = 1, column_names = names(row), prediction_column = "pred_"
-)
-get_ranked_or_tolerant_drugs(
-  row,
-  tolerance = 0.05, column_names = names(row), prediction_column = "pred_"
-)
-# drug names given directly, whatever the column naming scheme
-get_ranked_or_tolerant_drugs(
-  row,
-  rank = 1, column_names = names(row), drugs = c("A", "B", "C")
-)
-}
+# one patient's predictions (lower is better)
+row <- c(pred_A = 50.2, pred_B = 53.0, pred_C = 50.9)
+
+# the best treatment
+get_ranked_or_tolerant_drugs(row, rank = 1, column_names = names(row),
+                             prediction_column = "pred_")
+
+# the second best
+get_ranked_or_tolerant_drugs(row, rank = 2, column_names = names(row),
+                             prediction_column = "pred_")
+
+# every treatment within 1 point of the best
+get_ranked_or_tolerant_drugs(row, tolerance = 1, column_names = names(row),
+                             prediction_column = "pred_")
+
 }

@@ -2,7 +2,7 @@
 % Please edit documentation in R/pairwise_calibration.R
 \name{pairwise_calibration}
 \alias{pairwise_calibration}
-\title{Perform Pairwise Heterogeneous Treatment Effect Calibration Across Multiple Drugs}
+\title{Pairwise Calibration Across Every Pair of Treatments}
 \usage{
 pairwise_calibration(
   data,
@@ -61,7 +61,7 @@ the population for subgroup analysis.}
 \item{match.antiexact}{Optional character vector of additional variables for anti-exact matching. The received drug is always anti-exact.}
 
 \item{caliper}{Optional named numeric vector passed to \code{MatchIt::matchit}
-(e.g. \code{c(prehba1c = 0.4)}); interpreted in standard-deviation units by
+(e.g. \code{c(baseline = 0.4)}); interpreted in standard-deviation units by
 default (see \code{std.caliper}).}
 
 \item{std.caliper}{Logical. If \code{TRUE} (default), \code{caliper} is read
@@ -121,7 +121,7 @@ By default, a data.frame with one row per calibration group and drug pair combin
 
 If \code{return_matched = TRUE}, a list with elements \code{results} (the
 data.frame above), \code{matched} and \code{matchit}. The last two are named
-lists with one entry per drug pair (e.g. \code{"SGLT2_vs_GLP1"}), and are
+lists with one entry per drug pair (e.g. \code{"A_vs_B"}), and are
 \code{NULL} when \code{matching = FALSE}.
 }
 \description{
@@ -143,20 +143,34 @@ patients to have received different drugs; see
 \code{\link{pairwise_calibration_pair}} for the details.
 }
 \examples{
-\dontrun{
-# Example usage comparing 3 drugs with predicted outcomes
-results <- pairwise_calibration(
-  data = mydata,
-  drug_var = "treatment",
-  drugs = c("DrugA", "DrugB", "DrugC"),
-  prediction_vars = c("pred_drugA", "pred_drugB", "pred_drugC"),
-  outcome_var = "outcome",
-  cal_groups = c(3, 5),        # test 3 and 5 calibration groups
-  adjustment_var = c("age", "sex"),
-  matching = TRUE
+# observed vs predicted difference for A vs B, A vs C and B vs C,
+# adjusted for patient characteristics
+pairwise <- pairwise_calibration(
+  cateval_example,
+  drug_var        = "treatment",
+  drugs           = c("A", "B", "C"),
+  prediction_vars = c("pred_A", "pred_B", "pred_C"),
+  outcome_var     = "outcome",
+  cal_groups      = 5,
+  adjustment_var  = c("age", "sex", "baseline", "marker")
 )
-head(results)
-}
+head(pairwise)
+
+# the same with matching, keeping the matched cohorts for a balance check
+res <- pairwise_calibration(
+  cateval_example,
+  drug_var        = "treatment",
+  drugs           = c("A", "B", "C"),
+  prediction_vars = c("pred_A", "pred_B", "pred_C"),
+  outcome_var     = "outcome",
+  cal_groups      = 5,
+  matching        = TRUE,
+  matching_var    = c("age", "sex", "baseline", "marker"),
+  seed            = 1,
+  return_matched  = TRUE
+)
+names(res$matched)
+summary(res$matchit$A_vs_B)
 
 }
 \seealso{

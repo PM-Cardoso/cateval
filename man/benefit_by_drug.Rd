@@ -2,7 +2,7 @@
 % Please edit documentation in R/benefit_by_drug.R
 \name{benefit_by_drug}
 \alias{benefit_by_drug}
-\title{Overall-Benefit Calibration Split by Drug Class}
+\title{Overall-Benefit Calibration Split by Treatment}
 \usage{
 benefit_by_drug(
   pairs,
@@ -18,16 +18,16 @@ benefit_by_drug(
 \item{pairs}{A matched-pairs data frame from \code{\link{match_benefit_pairs}}
 containing \code{index_drug}, \code{pred.benefit} and \code{obs.benefit}.}
 
-\item{drugs}{Optional character vector of all drug classes to report, in the
+\item{drugs}{Optional character vector of all treatments to report, in the
 desired order. Supply the full set (rather than relying on the drugs that
 happen to appear in \code{pairs}) so that the output and any plot show a
-consistent set of drug classes even when a drug class never anchors a
-matched pair. Drug classes with no matched pairs cannot be summarised and
+consistent set of treatments even when a treatment never anchors a
+matched pair. Treatments with no matched pairs cannot be summarised and
 are dropped with a warning; the returned \code{index_drug} column is a
-factor whose levels follow \code{drugs}. If \code{NULL} (default), the drug
-classes present in \code{pairs} are used.}
+factor whose levels follow \code{drugs}. If \code{NULL} (default), the treatments
+present in \code{pairs} are used.}
 
-\item{cal_groups}{Numeric scalar or vector. Number(s) of groups per drug class
+\item{cal_groups}{Numeric scalar or vector. Number(s) of groups per treatment
 (e.g. \code{10}, or \code{c(3, 5, 10)}). Each value is passed in turn to
 \code{\link{benefit_by_group}} and the results are stacked, with an
 \code{n_groups} column recording which setting produced each row.}
@@ -42,23 +42,29 @@ classes present in \code{pairs} are used.}
 }
 \value{
 A data frame stacking the \code{\link{benefit_by_group}} output for each
-drug class and each requested \code{cal_groups} value, with an
-\code{index_drug} column identifying the drug class that anchors each group
+treatment and each requested \code{cal_groups} value, with an
+\code{index_drug} column identifying the treatment that anchors each group
 and an \code{n_groups} column giving the number of calibration groups used.
 Suitable for faceting. Small or empty groups are handled as in
-\code{\link{benefit_by_group}}, with warnings naming the drug class.
+\code{\link{benefit_by_group}}, with warnings naming the treatment.
 }
 \description{
-Runs \code{\link{benefit_by_group}} separately within each drug class, where a
-matched pair is assigned to the drug class received by its index (matched)
+Runs \code{\link{benefit_by_group}} separately within each treatment, where a
+matched pair is assigned to the treatment received by its index (matched)
 patient. This shows whether the model's benefit predictions are well
-calibrated within the group of pairs anchored on each drug class.
+calibrated within the group of pairs anchored on each treatment.
 }
 \examples{
-\dontrun{
-benefit_by_drug(matched$combined, cal_groups = 10)
-benefit_by_drug(matched$combined, cal_groups = c(3, 5, 10))
-}
+matched <- match_benefit_pairs(
+  cateval_example,
+  drug_var     = "treatment",
+  outcome_var  = "outcome",
+  pred_cols    = c("pred_A", "pred_B", "pred_C"),
+  matching_var = c("age", "sex", "baseline", "marker"),
+  seed         = 1
+)
+
+benefit_by_drug(matched$combined, drugs = c("A", "B", "C"), cal_groups = 5)
 
 }
 \seealso{

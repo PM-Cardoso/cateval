@@ -2,7 +2,7 @@
 % Please edit documentation in R/get_best_drugs.R
 \name{get_best_drugs}
 \alias{get_best_drugs}
-\title{Assign Best Drugs Based on Prediction Rankings or Tolerance}
+\title{Find the Best or Near-Best Treatments for Each Patient}
 \usage{
 get_best_drugs(
   data,
@@ -42,13 +42,27 @@ A modified version of the original data frame with two new columns:
 Applies \code{\link{get_ranked_or_tolerant_drugs}} across all rows of a dataset to determine the best (or nearly best) drugs based on model predictions. Adds the result as new columns to the data.
 }
 \examples{
-\dontrun{
-preds <- data.frame(pred_A = c(0.1, 0.3), pred_B = c(0.2, 0.2), pred_C = c(0.3, 0.1))
-get_best_drugs(preds, rank = 1, column_names = names(preds), final_var_name = "best")
-get_best_drugs(preds, tolerance = 0.05, column_names = names(preds), final_var_name = "tolerant")
-# drug names given directly; output columns are named "best_rank1_drug_*"
-get_best_drugs(preds, rank = 1, column_names = names(preds),
-               final_var_name = "best_", drugs = c("A", "B", "C"))
-}
+# the treatment with the lowest prediction ("pred_" is removed from the
+# column names to give the treatment names)
+best <- get_best_drugs(
+  cateval_example,
+  column_names   = c("pred_A", "pred_B", "pred_C"),
+  final_var_name = "pred_"
+)
+table(best$pred_rank1_drug_name)
+
+# every treatment within 2 points of the best prediction
+near_best <- get_best_drugs(
+  cateval_example,
+  column_names   = c("pred_A", "pred_B", "pred_C"),
+  final_var_name = "pred_",
+  tolerance      = 2
+)
+head(near_best[, c("pred_A", "pred_B", "pred_C", "pred_within_2_of_best_drug_name")])
+
+# treatment names given directly, for any column naming scheme
+preds <- data.frame(score_x = c(1, 3), score_y = c(2, 1))
+get_best_drugs(preds, column_names = names(preds), final_var_name = "best_",
+               drugs = c("X", "Y"))
 
 }
