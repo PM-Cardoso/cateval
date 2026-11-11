@@ -21,9 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         config:
-          # Pinned rather than ubuntu-latest: the Ubuntu 26.04 image hung on
-          # apt downloads (DNS failures) in November 2026.
-          - {os: ubuntu-24.04,  r: 'release'}
+          - {os: ubuntu-latest, r: 'release'}
           - {os: macos-latest,  r: 'release'}
 
     env:

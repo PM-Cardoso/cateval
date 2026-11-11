@@ -21,10 +21,7 @@ concurrency:
 jobs:
   # Build the pkgdown site and upload it as a Pages artifact.
   build:
-    # Pinned rather than ubuntu-latest: the Ubuntu 26.04 image hung on apt
-    # downloads (DNS failures) in November 2026. Move back to ubuntu-latest
-    # once that image is reliable.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     # A normal build takes 2-4 minutes; fail fast instead of hanging for hours.
     timeout-minutes: 30
     env:
@@ -57,7 +54,7 @@ jobs:
   deploy:
     if: github.event_name != 'pull_request'
     needs: build
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:
       name: github-pages
