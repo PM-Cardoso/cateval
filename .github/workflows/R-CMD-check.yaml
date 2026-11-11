@@ -14,12 +14,16 @@ jobs:
   R-CMD-check:
     runs-on: ${{ matrix.config.os }}
     name: ${{ matrix.config.os }} (${{ matrix.config.r }})
+    # A normal check takes 2-4 minutes; fail fast instead of hanging for hours.
+    timeout-minutes: 30
 
     strategy:
       fail-fast: false
       matrix:
         config:
-          - {os: ubuntu-latest, r: 'release'}
+          # Pinned rather than ubuntu-latest: the Ubuntu 26.04 image hung on
+          # apt downloads (DNS failures) in November 2026.
+          - {os: ubuntu-24.04,  r: 'release'}
           - {os: macos-latest,  r: 'release'}
 
     env:
