@@ -274,7 +274,8 @@ test_that("plot_optimal_drugs uses neutral titles and keeps its summary tables",
 
   p <- plot_optimal_drugs(sets, groups)
   expect_s3_class(p, "patchwork")
-  expect_equal(p[[1]]$labels$title, "Number of near-best treatments")
+  # long titles wrap; compare the text without line breaks
+  expect_equal(gsub("\n", " ", p[[1]]$labels$title), "Number of near-best treatments")
 
   p2 <- plot_optimal_drugs(sets, groups, title_count = "Custom", subtitle = "Sub")
   expect_equal(p2[[1]]$labels$title, "Custom")

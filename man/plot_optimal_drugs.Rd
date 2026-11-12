@@ -28,7 +28,10 @@ comma-separated set of near-best treatments, e.g. \code{"A,C"} (the
 \item{title_count, title_sets}{Titles of the two charts.}
 
 \item{subtitle}{Optional subtitle for the first chart, e.g. to state the
-tolerance used.}
+tolerance used.
+
+Titles longer than 24 characters and subtitles longer than 36 wrap onto
+further lines, so each chart's text stays within its half of the figure.}
 }
 \value{
 If \code{plot = TRUE}, a patchwork object combining the two ggplot2

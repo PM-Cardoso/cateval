@@ -22,6 +22,9 @@
 #' @param subtitle Optional subtitle for the first chart, e.g. to state the
 #'   tolerance used.
 #'
+#' Titles longer than 24 characters and subtitles longer than 36 wrap onto
+#' further lines, so each chart's text stays within its half of the figure.
+#'
 #' @return If \code{plot = TRUE}, a patchwork object combining the two ggplot2
 #'   charts. If \code{plot = FALSE}, a list with \code{overall} (patients by
 #'   number of near-best treatments) and \code{breakdown} (patients by
@@ -99,7 +102,8 @@ plot_optimal_drugs <- function(data, groups, plot = TRUE,
       panel.grid.major.y = ggplot2::element_blank(),
       panel.grid.minor = ggplot2::element_blank(),
       panel.grid.major.x = ggplot2::element_line(colour = "#e1e0d9", linewidth = 0.3),
-      plot.title = ggplot2::element_text(face = "bold", colour = "#0b0b0b"),
+      plot.title = ggplot2::element_text(face = "bold", colour = "#0b0b0b", size = ggplot2::rel(1.05)),
+      plot.title.position = "plot",
       plot.subtitle = ggplot2::element_text(colour = "#52514e"),
       strip.text = ggplot2::element_text(hjust = 0, face = "bold", colour = "#0b0b0b")
     )
@@ -107,6 +111,10 @@ plot_optimal_drugs <- function(data, groups, plot = TRUE,
     labels = scales::percent,
     expand = ggplot2::expansion(mult = c(0, 0.25))
   )
+
+  # Long titles and subtitles wrap, so each stays within its own chart
+  # whatever the font.
+  wrap <- function(x, width) if (is.null(x)) NULL else stringr::str_wrap(x, width)
 
   # ---- Plot number of drugs ----
   plot_a <- ggplot2::ggplot(
@@ -119,7 +127,7 @@ plot_optimal_drugs <- function(data, groups, plot = TRUE,
       hjust = -0.15, size = 3.2, colour = "#52514e"
     ) +
     pct_axis +
-    ggplot2::labs(title = title_count, subtitle = subtitle) +
+    ggplot2::labs(title = wrap(title_count, 24), subtitle = wrap(subtitle, 36)) +
     theme_bars
 
   # ---- Prepare combination plot data ----
@@ -143,7 +151,7 @@ plot_optimal_drugs <- function(data, groups, plot = TRUE,
     ) +
     ggplot2::facet_grid(Combinations ~ ., scales = "free_y", space = "free_y", switch = "y") +
     pct_axis +
-    ggplot2::labs(title = title_sets) +
+    ggplot2::labs(title = wrap(title_sets, 24)) +
     theme_bars +
     ggplot2::theme(
       strip.placement = "outside",

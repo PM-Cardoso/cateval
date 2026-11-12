@@ -44,6 +44,12 @@ reproduce 2.5.0 results, install that version:
   named variables only. It is the last argument, so calls that give arguments
   by position are unaffected.
 
+## `plot_optimal_drugs()`
+
+* Titles start at the left edge of each chart and are slightly smaller, so
+  the right title no longer runs off the image. Long titles and subtitles
+  wrap onto further lines, so the text fits in any font. Arguments and returned tables are unchanged.
+
 ## Dependencies
 
 * `splines` (part of R) is now imported. `sandwich` is suggested, for the
