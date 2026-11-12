@@ -527,62 +527,205 @@
 }
 
 
-# Outcome-model formula for one calibration group ---------------------------
+# Minimum number of distinct values for a variable to enter as a spline.
+.spline_min_distinct <- 10
+
+
+# Check the form of `spline_df` ----------------------------------------------
 #
-# The treatment effect is the second coefficient of a model of the outcome on
-# the received drug, optionally adjusted for covariates. Categorical adjustment
-# variables are included only when they vary within the group, since a constant
-# factor cannot be estimated.
+# NULL (no splines), one whole number (every eligible continuous adjustment
+# variable) or a vector of whole numbers named by adjustment variable. The data
+# are checked later, in .pairwise_adjustment_design(), once the calibration
+# cohort of the pair is known.
 #
-# @return A formula string.
 # @noRd
-.pairwise_group_formula <- function(group_data, adjustment_var) {
-  formula_str <- "dataset_outcome_var ~ dataset_drug_var"
-
-  if (!is.null(adjustment_var)) {
-    is_cat <- sapply(
-      group_data[, adjustment_var, drop = FALSE],
-      function(x) is.factor(x) || is.character(x)
-    )
-    cat_vars  <- adjustment_var[is_cat]
-    cont_vars <- setdiff(adjustment_var, cat_vars)
-
-    if (length(cont_vars) > 0) {
-      formula_str <- paste(formula_str, paste(cont_vars, collapse = " + "), sep = " + ")
+.check_spline_df <- function(spline_df, adjustment_var) {
+  if (is.null(spline_df)) return(invisible(NULL))
+  if (length(adjustment_var) == 0) {
+    stop("`spline_df` needs `adjustment_var`: splines apply to adjustment variables.")
+  }
+  if (!is.numeric(spline_df) || length(spline_df) == 0 || anyNA(spline_df) ||
+      any(spline_df < 1) || any(spline_df != round(spline_df))) {
+    stop("`spline_df` must be NULL, a whole number of at least 1, or a vector of them ",
+         "named by adjustment variable (e.g. c(baseline = 3)).")
+  }
+  nms <- names(spline_df)
+  if (is.null(nms)) {
+    if (length(spline_df) != 1) {
+      stop("`spline_df` must be a single number, or a vector named by adjustment ",
+           "variable (e.g. c(baseline = 3)).")
     }
-    for (v in cat_vars) {
-      if (length(unique(group_data[[v]])) > 1) {
-        formula_str <- paste(formula_str, "+", v)
-      }
+  } else {
+    if (any(nms == "") || anyDuplicated(nms)) {
+      stop("Every element of `spline_df` must be named, once, by an adjustment variable.")
+    }
+    unknown <- setdiff(nms, adjustment_var)
+    if (length(unknown) > 0) {
+      stop("`spline_df` names variable(s) not in `adjustment_var`: ",
+           paste(unknown, collapse = ", "), ".")
     }
   }
-
-  formula_str
+  invisible(NULL)
 }
 
 
-# Treatment-effect coefficient for one calibration group --------------------
+# Adjustment variables that enter as splines, with their df -------------------
 #
-# Used for the bootstrap replicates, where a resampled group may happen to
-# contain only one of the two drugs (or produce an unestimable model). Such a
-# replicate contributes NA rather than stopping the bootstrap.
-#
-# @return A single number, or NA_real_ when the effect cannot be estimated.
+# @param cc The adjustment variables on the rows used in the outcome model.
+# @return A numeric vector of df, named by variable (empty for no splines).
 # @noRd
-.pairwise_group_coef <- function(group_data, drugs, adjustment_var) {
-  group_data$dataset_drug_var <- factor(group_data$dataset_drug_var, levels = rev(drugs))
+.spline_terms <- function(cc, adjustment_var, spline_df, pair_label) {
+  if (is.null(spline_df)) return(numeric(0))
+  n_distinct <- function(x) length(unique(x))
 
-  if (length(unique(stats::na.omit(group_data$dataset_drug_var))) < 2) {
-    return(NA_real_)
+  if (is.null(names(spline_df))) {
+    need <- max(.spline_min_distinct, spline_df + 2)
+    eligible <- adjustment_var[vapply(adjustment_var, function(v) {
+      is.numeric(cc[[v]]) && n_distinct(cc[[v]]) >= need
+    }, logical(1))]
+    if (length(eligible) == 0) {
+      message("`spline_df`: no adjustment variable is numeric with at least ", need,
+              " distinct values", pair_label, ", so all enter as straight lines.")
+    }
+    return(stats::setNames(rep(spline_df, length(eligible)), eligible))
   }
 
-  model <- try(
-    stats::glm(stats::as.formula(.pairwise_group_formula(group_data, adjustment_var)), data = group_data),
-    silent = TRUE
-  )
-  if (inherits(model, "try-error")) return(NA_real_)
+  for (v in names(spline_df)) {
+    x <- cc[[v]]
+    if (!is.numeric(x)) {
+      stop("`spline_df`: `", v, "` is not numeric, so it cannot enter as a spline.")
+    }
+    need <- max(.spline_min_distinct, spline_df[[v]] + 2)
+    if (n_distinct(x) < need) {
+      stop("`spline_df`: `", v, "` has ", n_distinct(x), " distinct values", pair_label,
+           "; a spline with ", spline_df[[v]], " df needs at least ", need, ".")
+    }
+  }
+  spline_df
+}
 
-  unname(stats::coef(model)[2])
+
+# Adjustment columns for the pairwise outcome model ---------------------------
+#
+# Built once for the calibration cohort of a pair, so every number of
+# calibration groups and every bootstrap replicate uses the same columns, and
+# the same spline knots. Continuous variables enter as they are, or as natural
+# cubic splines (splines::ns, knots at quantiles) when `spline_df` says so;
+# categorical ones (factor, character, logical) as indicators, reference level
+# left out, with unused levels dropped. A categorical variable with one level in
+# the cohort adds nothing and is left out.
+#
+# @return A list: `Z`, a numeric matrix with one row per row of `data` (NA on
+#   rows not used), and `complete`, TRUE for the rows the outcome model can use
+#   (outcome, drug and every adjustment variable present).
+# @noRd
+.pairwise_adjustment_design <- function(data, adjustment_var, spline_df, pair_label = "") {
+  complete <- !is.na(data$dataset_outcome_var) & !is.na(data$dataset_drug_var)
+  if (length(adjustment_var) == 0) {
+    return(list(Z = matrix(numeric(0), nrow = nrow(data), ncol = 0), complete = complete))
+  }
+  complete <- complete & stats::complete.cases(data[, adjustment_var, drop = FALSE])
+  cc <- data[complete, adjustment_var, drop = FALSE]
+
+  df_by_var <- .spline_terms(cc, adjustment_var, spline_df, pair_label)
+
+  blocks <- list()
+  for (v in adjustment_var) {
+    x <- cc[[v]]
+    if (v %in% names(df_by_var)) {
+      b <- splines::ns(x, df = df_by_var[[v]])
+      blocks[[v]] <- matrix(b, nrow = nrow(b),
+                            dimnames = list(NULL, paste0(v, "_ns", seq_len(ncol(b)))))
+    } else if (is.factor(x) || is.character(x) || is.logical(x)) {
+      f <- droplevels(as.factor(x))
+      if (nlevels(f) < 2) next
+      ind <- vapply(levels(f)[-1], function(l) as.numeric(f == l), numeric(length(f)))
+      blocks[[v]] <- matrix(ind, nrow = length(f),
+                            dimnames = list(NULL, paste0(v, levels(f)[-1])))
+    } else {
+      blocks[[v]] <- matrix(as.numeric(x), ncol = 1, dimnames = list(NULL, v))
+    }
+  }
+
+  Z <- matrix(NA_real_, nrow = nrow(data), ncol = 0)
+  if (length(blocks) > 0) {
+    zc <- do.call(cbind, unname(blocks))
+    Z <- matrix(NA_real_, nrow = nrow(data), ncol = ncol(zc),
+                dimnames = list(NULL, colnames(zc)))
+    Z[complete, ] <- zc
+  }
+  list(Z = Z, complete = complete)
+}
+
+
+# Shared outcome model across the calibration groups --------------------------
+#
+# One least-squares fit with an intercept and a drug effect for each group and
+# the adjustment columns `Z` shared by every group:
+#   outcome ~ 0 + group + group:drug1 + Z
+# A group needs patients on both drugs for its effect to be estimated; groups
+# without get NA. Columns that cannot be estimated (aliased) are left out, as
+# lm() does; the drug effects come before `Z`, so they are kept first.
+#
+# @param y Outcome; @param is_drug1 TRUE for drugs[1]; @param group Integer
+#   group (1..n_groups); @param Z Adjustment columns. All on the rows used.
+# @param se If TRUE, also return HC3 standard errors.
+# @return A list: `coef` (effect of drugs[1] minus drugs[2], per group), `n_min`
+#   (fewer of the two drugs in each group), `df_residual`, and `se` when asked.
+# @noRd
+.pairwise_shared_fit <- function(y, is_drug1, group, n_groups, Z, se = TRUE) {
+  n1 <- tabulate(group[is_drug1], n_groups)
+  n2 <- tabulate(group[!is_drug1], n_groups)
+  out <- list(coef = rep(NA_real_, n_groups), n_min = pmin(n1, n2),
+              df_residual = NA_real_, se = rep(NA_real_, n_groups))
+
+  effect_groups <- which(n1 > 0 & n2 > 0)
+  if (length(effect_groups) == 0) return(out)
+
+  present <- which(n1 + n2 > 0)
+  X <- cbind(
+    outer(group, present, `==`) * 1,
+    outer(group, effect_groups, `==`) * is_drug1,
+    Z
+  )
+  fit <- stats::lm.fit(X, y)
+  eff_idx <- length(present) + seq_along(effect_groups)
+  out$coef[effect_groups] <- fit$coefficients[eff_idx]
+  out$df_residual <- length(y) - fit$rank
+
+  if (isTRUE(se)) {
+    V <- .vcov_hc3(X, fit)
+    out$se[effect_groups] <- sqrt(diag(V)[eff_idx])
+  }
+  out
+}
+
+
+# HC3 (heteroscedasticity-consistent) covariance matrix -----------------------
+#
+# Sandwich estimator (X'X)^-1 X' diag(e_i^2 / (1 - h_i)^2) X (X'X)^-1, as
+# sandwich::vcovHC(type = "HC3"). h_i is the leverage of row i. A row with
+# leverage 1 fits exactly (residual 0) and makes HC3 undefined; it is given
+# weight 0, so one such row does not turn every standard error into NaN.
+# Aliased columns (not estimated) get NA.
+#
+# @param X The model matrix. @param fit The lm() or lm.fit() result for X.
+# @return A p x p matrix in the column order of X.
+# @noRd
+.vcov_hc3 <- function(X, fit) {
+  p <- ncol(X)
+  r <- fit$rank
+  V <- matrix(NA_real_, p, p)
+  if (r == 0) return(V)
+
+  keep <- fit$qr$pivot[seq_len(r)]
+  xtx_inv <- chol2inv(fit$qr$qr[seq_len(r), seq_len(r), drop = FALSE])
+  h <- rowSums(qr.Q(fit$qr)[, seq_len(r), drop = FALSE]^2)
+  w <- ifelse(h < 1 - 1e-8, fit$residuals / (1 - h), 0)
+  meat <- crossprod(X[, keep, drop = FALSE] * w)
+
+  V[keep, keep] <- xtx_inv %*% meat %*% xtx_inv
+  V
 }
 
 

@@ -2,10 +2,11 @@
 #'
 #' Estimates the treatment effect between two drugs within groups of predicted
 #' benefit. Patients are ordered by their predicted benefit, split into equal-sized
-#' calibration groups, and the observed treatment effect is estimated within each
-#' group. Comparing that observed effect with the predicted benefit is what shows
-#' whether the model is well calibrated. Covariate matching can optionally be
-#' applied before the effects are estimated.
+#' calibration groups, and the observed treatment effect in each group is
+#' estimated from one regression across all groups. Comparing that observed
+#' effect with the predicted benefit is what shows whether the model is well
+#' calibrated. Covariate matching can optionally be applied before the effects
+#' are estimated.
 #'
 #' The predicted benefit is expected on the scale \code{drugs[1]} minus
 #' \code{drugs[2]} (as produced by \code{\link{pairwise_calibration}}), so a
@@ -25,7 +26,10 @@
 #' @param outcome_var Character string. Column name for the outcome variable (e.g., clinical measurement).
 #' @param cal_groups Numeric or numeric vector. Number(s) of calibration groups (e.g., quantiles) to divide the data into based on predicted benefit.
 #' @param matching Logical. Whether to perform covariate matching using the `MatchIt` package before estimating treatment effects.
-#' @param adjustment_var Optional character vector. Names of covariates to include as adjustment variables in the regression model. Must not include `drug_var` or `outcome_var`.
+#' @param adjustment_var Optional character vector. Names of covariates to
+#'   adjust for in the regression. Each has one coefficient, shared by every
+#'   calibration group (see Details). Must not include `drug_var` or
+#'   `outcome_var`.
 #' @param matching_var Optional character vector. Covariates to use for matching. Defaults to `adjustment_var` if not specified. Must not include `drug_var` or `outcome_var`. Patients with a missing value in any `matching_var`, `match.exact` or `match.antiexact` variable are excluded before matching.
 #' @param match.exact Optional character vector. Variables for exact matching. Must not include `drug_var`, since matched patients are always required to have received different drugs.
 #' @param match.antiexact Optional character vector. Additional variables for anti-exact matching. The received drug is always included (see Details).
@@ -56,19 +60,31 @@
 #'   contains the matched cohort and the \code{matchit} object, so the matching
 #'   can be inspected (for example with a balance plot). Default \code{FALSE}.
 #' @param bootstrap Logical. If \code{FALSE} (default), confidence intervals are
-#'   the model's Wald intervals. If \code{TRUE}, they are percentile bootstrap
-#'   intervals (see Details).
+#'   Wald intervals with HC3 robust standard errors. If \code{TRUE}, they are
+#'   percentile bootstrap intervals (see Details).
 #' @param n_boot Integer. Number of bootstrap replicates (used when
 #'   \code{bootstrap = TRUE}).
 #' @param boot_seed Optional integer. Seed set before bootstrapping for
 #'   reproducibility.
 #' @param conf Numeric. Confidence level for the intervals (default 0.95).
+#' @param spline_df Optional. Lets continuous adjustment variables enter the
+#'   regression as a curve (a natural cubic spline) instead of a straight line.
+#'   \itemize{
+#'     \item \code{NULL} (default): every adjustment variable is a straight line.
+#'     \item One number, e.g. \code{3}: every numeric adjustment variable with
+#'       at least 10 distinct values becomes a curve with that many degrees of
+#'       freedom. The others stay straight lines.
+#'     \item A named vector, e.g. \code{c(baseline = 3)}: only the named
+#'       variables become curves, each with its own degrees of freedom.
+#'   }
+#'   Degrees of freedom set how flexible the curve is: 1 is a straight line, 3
+#'   lets it bend twice. See Details.
 #'
 #' @return By default, a data frame where each row corresponds to a calibration group within each `cal_groups` setting. Columns include:
 #'
 #' \describe{
 #'   \item{mean}{The mean predicted benefit score for patients in the calibration group.}
-#'   \item{coef}{Estimated average treatment effect (regression coefficient) comparing the two drugs, adjusted if covariates are specified. \code{NA} when the group does not contain patients on both drugs.}
+#'   \item{coef}{Estimated average treatment effect in the group (regression coefficient) comparing the two drugs, adjusted if covariates are specified. \code{NA} when the group does not contain patients on both drugs.}
 #'   \item{coef_low}{Lower bound of the confidence interval for the treatment effect. \code{NA} when the effect, or its interval, cannot be estimated (see Details).}
 #'   \item{coef_high}{Upper bound of the confidence interval for the treatment effect.}
 #'   \item{n_groups}{Number of calibration groups (i.e., the value of cal_groups) used to create this stratification.}
@@ -84,6 +100,36 @@
 #' \code{matching = FALSE}, since no matching was performed.
 #'
 #' @details
+#' \strong{The regression.} For each value of \code{cal_groups}, one linear
+#' regression is fitted to all the patients of the two drugs:
+#' \deqn{Y_i = \mu_{g(i)} + \theta_{g(i)} T_i + \beta^\top z_i + \varepsilon_i}
+#' with an intercept \eqn{\mu_g} and a drug effect \eqn{\theta_g} for each
+#' group \eqn{g}, \eqn{T_i = 1} for \code{drugs[1]}, and the adjustment
+#' variables \eqn{z_i}. \eqn{\theta_g} is \code{coef}. Every group shares the
+#' adjustment coefficients \eqn{\beta}: they only remove differences in
+#' prognosis between the two drugs, so they are estimated from all the patients
+#' of the pair, and every group is adjusted for the same variables. The group
+#' intercepts take up the differences in outcome level between groups. Without
+#' adjustment variables, or with one group, the estimates equal those of a
+#' separate regression in each group. Categorical adjustment variables enter as
+#' indicators (unused levels dropped); one with a single level among the
+#' patients used adds nothing and is left out. Patients with a missing outcome
+#' or adjustment variable are left out of the regression, but still count in
+#' \code{mean}, \code{n_drug1} and \code{n_drug2}.
+#'
+#' \strong{Splines.} One coefficient per variable assumes a straight-line
+#' effect. When a variable that drives the predicted benefit has a curved
+#' effect on the outcome, the groups at the ends of the range can be biased;
+#' \code{spline_df} lets such variables enter as natural cubic splines
+#' (\code{splines::ns}). The spline knots are set once, at quantiles of the
+#' pair's patients (after matching, if any), and kept for every value of
+#' \code{cal_groups} and every bootstrap replicate.
+#'
+#' \strong{Confidence intervals.} The analytical intervals use HC3 robust
+#' standard errors, which allow the spread of the outcome to differ between
+#' patients and groups, and widen the intervals of groups with few patients on
+#' a drug.
+#'
 #' \strong{Matching.} When \code{matching = TRUE}, patients predicted to do
 #' better on \code{drugs[1]} (\code{benefit_var <= 0}) form the treated group
 #' and are matched to patients predicted to do better on \code{drugs[2]}. The
@@ -99,15 +145,16 @@
 #' one drug received the same drug as every patient predicted to do better on
 #' the other), \code{NULL} is returned with a warning.
 #'
-#' \strong{Groups too small for an interval.} A group's Wald interval needs at
-#' least one residual degree of freedom in the outcome model (more patients than
-#' model coefficients). When that is not met the point estimate is still
-#' returned but \code{coef_low} and \code{coef_high} are \code{NA}, with a
-#' warning naming the group.
+#' \strong{Groups too small for an interval.} A group needs at least two
+#' patients on each drug for an interval (with one, that patient fits exactly
+#' and its group's variance cannot be estimated). When that is not met the
+#' point estimate is still returned but \code{coef_low} and \code{coef_high}
+#' are \code{NA}, with a warning naming the group. The same happens to every
+#' group when the regression has no residual degrees of freedom.
 #'
 #' \strong{Bootstrap intervals.} The calibration groups are fixed from the
-#' original cohort before bootstrapping, so each replicate re-estimates the
-#' treatment effect for the *same* groups rather than shifting the group
+#' original cohort before bootstrapping, so each replicate refits the
+#' regression for the *same* groups rather than shifting the group
 #' boundaries between replicates. When matching has been applied the resampling
 #' unit is the matched set, which keeps matched patients together; otherwise
 #' patients are resampled individually. The matching itself is not repeated
@@ -122,10 +169,13 @@
 #' not independent. Neither the Wald nor the bootstrap interval widens to reflect
 #' this, so both should be read as approximate and the limitation stated when
 #' they are reported. Setting \code{replace = FALSE} removes the dependence, at
-#' the cost of fewer and generally poorer-quality matches.
+#' the cost of fewer and generally poorer-quality matches. The two patients of
+#' a matched set usually fall in different calibration groups (they are
+#' predicted to do better on different drugs), so the matching does not balance
+#' the two drugs within a group; the adjustment variables do that.
 #'
 #' @import dplyr
-#' @importFrom stats glm confint.default
+#' @importFrom stats lm.fit qnorm complete.cases
 #' @importFrom MatchIt matchit get_matches
 #'
 #' @examples
@@ -157,6 +207,18 @@
 #'   seed         = 1
 #' )
 #'
+#' # baseline as a curve (natural spline, 3 degrees of freedom)
+#' pairwise_calibration_pair(
+#'   ab,
+#'   drug_var       = "treatment",
+#'   drugs          = c("A", "B"),
+#'   benefit_var    = "benefit",
+#'   outcome_var    = "outcome",
+#'   cal_groups     = 5,
+#'   adjustment_var = c("age", "sex", "baseline", "marker"),
+#'   spline_df      = c(baseline = 3)
+#' )
+#'
 #' @export
 pairwise_calibration_pair <- function(data,
                             drug_var,
@@ -181,7 +243,8 @@ pairwise_calibration_pair <- function(data,
                             bootstrap = FALSE,
                             n_boot = 1000,
                             boot_seed = NULL,
-                            conf = 0.95) {
+                            conf = 0.95,
+                            spline_df = NULL) {
 
   # Use package-qualified functions throughout
   `%>%` <- dplyr::`%>%`
@@ -195,6 +258,7 @@ pairwise_calibration_pair <- function(data,
     list(adjustment_var = adjustment_var),
     c(drug_var = drug_var, outcome_var = outcome_var)
   )
+  .check_spline_df(spline_df, adjustment_var)
   if (isTRUE(matching)) {
     if (length(matching_var) == 0) stop("Provide at least one matching_var")
     if (!all(matching_var %in% colnames(data))) stop("Some matching_var not in data")
@@ -310,50 +374,56 @@ pairwise_calibration_pair <- function(data,
     calibration_data <- initial_dataset
   }
 
+  # Outcome model inputs ----
+  # The adjustment columns (and any spline knots) are built once for the
+  # calibration cohort, so every value of cal_groups and every bootstrap
+  # replicate uses the same ones.
+  design <- .pairwise_adjustment_design(
+    calibration_data, adjustment_var, spline_df,
+    pair_label = paste0(" in the ", drugs[1], " vs ", drugs[2], " data")
+  )
+  y_all <- calibration_data$dataset_outcome_var
+  is_drug1_all <- calibration_data$dataset_drug_var == drugs[1]
+  is_drug2_all <- calibration_data$dataset_drug_var == drugs[2]
+
   result <- NULL
 
   for (cg in cal_groups) {
 
-    coef      <- rep(NA_real_, cg)
     coef_low  <- rep(NA_real_, cg)
     coef_high <- rep(NA_real_, cg)
     mean_vals <- rep(NA_real_, cg)
     n_drug1   <- rep(0, cg)
     n_drug2   <- rep(0, cg)
-    no_ci_groups <- integer(0)
 
     grouped_data <- calibration_data %>%
       dplyr::mutate(grouping = dplyr::ntile(dataset_benefit, cg))
+    grp <- grouped_data$grouping
 
     for (g in seq_len(cg)) {
-      group_data <- grouped_data %>%
-        dplyr::filter(grouping == g) %>%
-        dplyr::mutate(dataset_drug_var = factor(dataset_drug_var, levels = rev(drugs)))
+      in_g <- !is.na(grp) & grp == g
+      mean_vals[g] <- mean(grouped_data$dataset_benefit[in_g], na.rm = TRUE)
+      n_drug1[g] <- sum(in_g & is_drug1_all, na.rm = TRUE)
+      n_drug2[g] <- sum(in_g & is_drug2_all, na.rm = TRUE)
+    }
 
-      mean_vals[g] <- mean(group_data$dataset_benefit, na.rm = TRUE)
-      n_drug1[g] <- nrow(dplyr::filter(group_data, dataset_drug_var == drugs[1]))
-      n_drug2[g] <- nrow(dplyr::filter(group_data, dataset_drug_var == drugs[2]))
+    # One regression across all groups: an intercept and a drug effect per
+    # group, adjustment coefficients shared by every group.
+    use <- design$complete & !is.na(grp)
+    fit <- .pairwise_shared_fit(
+      y_all[use], is_drug1_all[use], grp[use], cg,
+      design$Z[use, , drop = FALSE], se = !isTRUE(bootstrap)
+    )
+    coef <- fit$coef
 
-      if (length(unique(group_data$dataset_drug_var)) < 2) next
-
-      model <- stats::glm(
-        stats::as.formula(.pairwise_group_formula(group_data, adjustment_var)),
-        data = group_data
-      )
-
-      coef[g] <- stats::coef(model)[2]
-
-      if (!isTRUE(bootstrap)) {
-        # With no residual degrees of freedom the dispersion, and so the
-        # interval, cannot be estimated.
-        if (model$df.residual >= 1 && !is.na(coef[g])) {
-          ci <- suppressMessages(stats::confint.default(model, level = conf))
-          coef_low[g]  <- ci[2, 1]
-          coef_high[g] <- ci[2, 2]
-        } else if (!is.na(coef[g])) {
-          no_ci_groups <- c(no_ci_groups, g)
-        }
-      }
+    # A drug with one patient in a group fits that patient exactly, so the
+    # group's variance (and interval) cannot be estimated; nor can any interval
+    # when the regression has no residual degrees of freedom.
+    estimated <- which(!is.na(coef))
+    no_ci_groups <- if (!is.na(fit$df_residual) && fit$df_residual < 1) {
+      estimated
+    } else {
+      estimated[fit$n_min[estimated] < 2]
     }
 
     if (length(no_ci_groups) > 0) {
@@ -365,10 +435,17 @@ pairwise_calibration_pair <- function(data,
       )
     }
 
+    if (!isTRUE(bootstrap)) {
+      z <- stats::qnorm(1 - (1 - conf) / 2)
+      ok <- setdiff(estimated, no_ci_groups)
+      coef_low[ok]  <- coef[ok] - z * fit$se[ok]
+      coef_high[ok] <- coef[ok] + z * fit$se[ok]
+    }
+
     # Percentile bootstrap intervals ----
-    # The group labels above are held fixed, so every replicate re-estimates the
-    # effect for the same groups. Matched sets are resampled as a unit so that
-    # matched patients stay together.
+    # The group labels above are held fixed, so every replicate refits the
+    # regression for the same groups. Matched sets are resampled as a unit so
+    # that matched patients stay together.
     if (isTRUE(bootstrap)) {
       if (!is.null(boot_seed)) set.seed(boot_seed)
 
@@ -384,18 +461,19 @@ pairwise_calibration_pair <- function(data,
 
       for (b in seq_len(n_boot)) {
         sampled <- sample(unique_units, length(unique_units), replace = TRUE)
-        rep_data <- grouped_data[unlist(unit_rows[sampled], use.names = FALSE), , drop = FALSE]
-
-        for (g in seq_len(cg)) {
-          boot_coef[b, g] <- .pairwise_group_coef(
-            rep_data[rep_data$grouping == g, , drop = FALSE],
-            drugs, adjustment_var
-          )
-        }
+        idx <- unlist(unit_rows[sampled], use.names = FALSE)
+        idx <- idx[use[idx]]
+        boot_coef[b, ] <- tryCatch(
+          .pairwise_shared_fit(
+            y_all[idx], is_drug1_all[idx], grp[idx], cg,
+            design$Z[idx, , drop = FALSE], se = FALSE
+          )$coef,
+          error = function(e) rep(NA_real_, cg)
+        )
       }
 
       for (g in seq_len(cg)) {
-        if (is.na(coef[g]) || all(is.na(boot_coef[, g]))) next
+        if (is.na(coef[g]) || g %in% no_ci_groups || all(is.na(boot_coef[, g]))) next
         ci <- .percentile_ci(boot_coef[, g], conf = conf)
         coef_low[g]  <- ci[1]
         coef_high[g] <- ci[2]

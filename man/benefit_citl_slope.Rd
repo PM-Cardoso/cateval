@@ -16,12 +16,12 @@ benefit_citl_slope(
 \item{pairs}{A matched-pairs data frame from \code{\link{match_benefit_pairs}}
 containing \code{pred.benefit} and \code{obs.benefit}.}
 
-\item{bootstrap}{Logical. If \code{FALSE} (default) the intervals are the
-analytical regression confidence intervals. If \code{TRUE} they are
-percentile bootstrap intervals that resample the matched pairs independently
-(one row = one pair). These relax the regression's homoscedastic-error
-assumption, but do not by themselves account for the dependence from reusing
-a control patient across pairs (matching with replacement).}
+\item{bootstrap}{Logical. If \code{FALSE} (default) the intervals are
+analytical, with HC3 robust standard errors: they allow the spread of the
+observed benefit to change with the predicted benefit. If \code{TRUE} they
+are percentile bootstrap intervals that resample the matched pairs
+independently (one row = one pair). Neither accounts for the dependence
+from reusing a control patient across pairs (matching with replacement).}
 
 \item{n_boot}{Integer. Number of bootstrap replicates.}
 

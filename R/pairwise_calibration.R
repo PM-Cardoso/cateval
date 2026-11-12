@@ -3,7 +3,7 @@
 #' This function computes heterogeneous treatment effect calibration curves for all pairwise comparisons
 #' between a specified set of drugs. For each pair, it calculates the predicted benefit (difference between
 #' predicted outcomes), partitions patients into calibration groups based on predicted benefit quantiles,
-#' and estimates treatment effects within each group.
+#' and estimates the treatment effect in each group from one regression across all groups.
 #'
 #' Internally, the function calls `pairwise_calibration_pair()` for each drug pair to obtain
 #' subgroup treatment effect estimates and confidence intervals.
@@ -29,7 +29,10 @@
 #' @param cal_groups Numeric scalar or vector specifying the number(s) of calibration groups (quantiles) to partition
 #'   the population for subgroup analysis.
 #' @param matching Logical; if `TRUE`, performs covariate matching using the `MatchIt` package before estimating effects.
-#' @param adjustment_var Optional character vector of covariate column names to adjust for in regression models. Must not include `drug_var` or `outcome_var`.
+#' @param adjustment_var Optional character vector of covariate column names to
+#'   adjust for in the regression. Each has one coefficient, shared by every
+#'   calibration group of a pair (see \code{\link{pairwise_calibration_pair}}).
+#'   Must not include `drug_var` or `outcome_var`.
 #' @param matching_var Optional character vector specifying variables to match on. Defaults to `adjustment_var` if NULL. Must not include `drug_var` or `outcome_var`.
 #' @param match.exact Optional character vector of variables for exact matching. Must not include `drug_var`.
 #' @param match.antiexact Optional character vector of additional variables for anti-exact matching. The received drug is always anti-exact.
@@ -58,18 +61,27 @@
 #'   contains the matched cohort and \code{matchit} object for each drug pair,
 #'   so the matching can be inspected. Default \code{FALSE}.
 #' @param bootstrap Logical. If \code{FALSE} (default), confidence intervals are
-#'   the model's Wald intervals. If \code{TRUE}, they are percentile bootstrap
-#'   intervals. See \code{\link{pairwise_calibration_pair}} for details.
+#'   Wald intervals with HC3 robust standard errors. If \code{TRUE}, they are
+#'   percentile bootstrap intervals. See \code{\link{pairwise_calibration_pair}}
+#'   for details.
 #' @param n_boot Integer. Number of bootstrap replicates (used when
 #'   \code{bootstrap = TRUE}).
 #' @param boot_seed Optional integer. Seed set before bootstrapping for
 #'   reproducibility.
 #' @param conf Numeric. Confidence level for the intervals (default 0.95).
 #'
+#' @param spline_df Optional. Lets continuous adjustment variables enter the
+#'   regression as a curve (a natural cubic spline) instead of a straight line:
+#'   \code{NULL} (default) for straight lines; one number (e.g. \code{3}) for
+#'   every numeric adjustment variable with at least 10 distinct values; or a
+#'   named vector (e.g. \code{c(baseline = 3)}) for the named variables only.
+#'   The number is the degrees of freedom of the curve. See
+#'   \code{\link{pairwise_calibration_pair}}.
+#'
 #' @return By default, a data.frame with one row per calibration group and drug pair combination, including:
 #' \describe{
 #'   \item{mean}{Mean predicted benefit in the calibration group.}
-#'   \item{coef}{Estimated treatment effect (regression coefficient) within the group: the observed outcome on drug1 relative to drug2. \code{NA} when the group does not contain patients on both drugs.}
+#'   \item{coef}{Estimated treatment effect (regression coefficient) in the group: the observed outcome on drug1 relative to drug2. \code{NA} when the group does not contain patients on both drugs.}
 #'   \item{coef_low}{Lower bound of the confidence interval for the estimate. \code{NA} when it cannot be estimated (too few patients in the group).}
 #'   \item{coef_high}{Upper bound of the confidence interval.}
 #'   \item{n_groups}{Number of calibration groups used for this stratification (the `cal_groups` value that produced the row).}
@@ -100,6 +112,18 @@
 #'   adjustment_var  = c("age", "sex", "baseline", "marker")
 #' )
 #' head(pairwise)
+#'
+#' # baseline as a curve (natural spline, 3 degrees of freedom)
+#' curved <- pairwise_calibration(
+#'   cateval_example,
+#'   drug_var        = "treatment",
+#'   drugs           = c("A", "B", "C"),
+#'   prediction_vars = c("pred_A", "pred_B", "pred_C"),
+#'   outcome_var     = "outcome",
+#'   cal_groups      = 5,
+#'   adjustment_var  = c("age", "sex", "baseline", "marker"),
+#'   spline_df       = c(baseline = 3)
+#' )
 #'
 #' # the same with matching, keeping the matched cohorts for a balance check
 #' res <- pairwise_calibration(
@@ -144,7 +168,8 @@ pairwise_calibration <- function(data,
                                bootstrap = FALSE,
                                n_boot = 1000,
                                boot_seed = NULL,
-                               conf = 0.95) {
+                               conf = 0.95,
+                               spline_df = NULL) {
   
   # Define pipe
   `%>%` <- dplyr::`%>%`
@@ -154,6 +179,7 @@ pairwise_calibration <- function(data,
   if (!all(prediction_vars %in% colnames(data))) stop("Some `prediction_vars` not found in data.")
   if (!(outcome_var %in% colnames(data))) stop("`outcome_var` not found in data.")
   if (!is.null(adjustment_var) && !all(adjustment_var %in% colnames(data))) stop("Some `adjustment_var` columns not found in data.")
+  .check_spline_df(spline_df, adjustment_var)
   if (isTRUE(matching)) {
     if (length(matching_var) == 0) stop("Provide at least one matching_var when matching=TRUE.")
     if (!is.null(matching_var) && !all(matching_var %in% colnames(data))) stop("Some matching_var columns not found in data.")
@@ -227,7 +253,8 @@ pairwise_calibration <- function(data,
       bootstrap = bootstrap,
       n_boot = n_boot,
       boot_seed = boot_seed,
-      conf = conf
+      conf = conf,
+      spline_df = spline_df
     )
 
     if (isTRUE(return_matched) && isTRUE(matching)) {

@@ -28,7 +28,8 @@ pairwise_calibration(
   bootstrap = FALSE,
   n_boot = 1000,
   boot_seed = NULL,
-  conf = 0.95
+  conf = 0.95,
+  spline_df = NULL
 )
 }
 \arguments{
@@ -52,7 +53,10 @@ the population for subgroup analysis.}
 
 \item{matching}{Logical; if \code{TRUE}, performs covariate matching using the \code{MatchIt} package before estimating effects.}
 
-\item{adjustment_var}{Optional character vector of covariate column names to adjust for in regression models. Must not include \code{drug_var} or \code{outcome_var}.}
+\item{adjustment_var}{Optional character vector of covariate column names to
+adjust for in the regression. Each has one coefficient, shared by every
+calibration group of a pair (see \code{\link{pairwise_calibration_pair}}).
+Must not include \code{drug_var} or \code{outcome_var}.}
 
 \item{matching_var}{Optional character vector specifying variables to match on. Defaults to \code{adjustment_var} if NULL. Must not include \code{drug_var} or \code{outcome_var}.}
 
@@ -94,8 +98,9 @@ contains the matched cohort and \code{matchit} object for each drug pair,
 so the matching can be inspected. Default \code{FALSE}.}
 
 \item{bootstrap}{Logical. If \code{FALSE} (default), confidence intervals are
-the model's Wald intervals. If \code{TRUE}, they are percentile bootstrap
-intervals. See \code{\link{pairwise_calibration_pair}} for details.}
+Wald intervals with HC3 robust standard errors. If \code{TRUE}, they are
+percentile bootstrap intervals. See \code{\link{pairwise_calibration_pair}}
+for details.}
 
 \item{n_boot}{Integer. Number of bootstrap replicates (used when
 \code{bootstrap = TRUE}).}
@@ -104,12 +109,20 @@ intervals. See \code{\link{pairwise_calibration_pair}} for details.}
 reproducibility.}
 
 \item{conf}{Numeric. Confidence level for the intervals (default 0.95).}
+
+\item{spline_df}{Optional. Lets continuous adjustment variables enter the
+regression as a curve (a natural cubic spline) instead of a straight line:
+\code{NULL} (default) for straight lines; one number (e.g. \code{3}) for
+every numeric adjustment variable with at least 10 distinct values; or a
+named vector (e.g. \code{c(baseline = 3)}) for the named variables only.
+The number is the degrees of freedom of the curve. See
+\code{\link{pairwise_calibration_pair}}.}
 }
 \value{
 By default, a data.frame with one row per calibration group and drug pair combination, including:
 \describe{
 \item{mean}{Mean predicted benefit in the calibration group.}
-\item{coef}{Estimated treatment effect (regression coefficient) within the group: the observed outcome on drug1 relative to drug2. \code{NA} when the group does not contain patients on both drugs.}
+\item{coef}{Estimated treatment effect (regression coefficient) in the group: the observed outcome on drug1 relative to drug2. \code{NA} when the group does not contain patients on both drugs.}
 \item{coef_low}{Lower bound of the confidence interval for the estimate. \code{NA} when it cannot be estimated (too few patients in the group).}
 \item{coef_high}{Upper bound of the confidence interval.}
 \item{n_groups}{Number of calibration groups used for this stratification (the \code{cal_groups} value that produced the row).}
@@ -128,7 +141,7 @@ lists with one entry per drug pair (e.g. \code{"A_vs_B"}), and are
 This function computes heterogeneous treatment effect calibration curves for all pairwise comparisons
 between a specified set of drugs. For each pair, it calculates the predicted benefit (difference between
 predicted outcomes), partitions patients into calibration groups based on predicted benefit quantiles,
-and estimates treatment effects within each group.
+and estimates the treatment effect in each group from one regression across all groups.
 }
 \details{
 Internally, the function calls \code{pairwise_calibration_pair()} for each drug pair to obtain
@@ -155,6 +168,18 @@ pairwise <- pairwise_calibration(
   adjustment_var  = c("age", "sex", "baseline", "marker")
 )
 head(pairwise)
+
+# baseline as a curve (natural spline, 3 degrees of freedom)
+curved <- pairwise_calibration(
+  cateval_example,
+  drug_var        = "treatment",
+  drugs           = c("A", "B", "C"),
+  prediction_vars = c("pred_A", "pred_B", "pred_C"),
+  outcome_var     = "outcome",
+  cal_groups      = 5,
+  adjustment_var  = c("age", "sex", "baseline", "marker"),
+  spline_df       = c(baseline = 3)
+)
 
 # the same with matching, keeping the matched cohorts for a balance check
 res <- pairwise_calibration(

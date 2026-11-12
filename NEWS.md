@@ -1,3 +1,54 @@
+# cateval 2.6.0
+
+This release changes the results of the pairwise calibration and the intervals
+of `benefit_citl_slope()`. Code written for 2.5.0 runs without changes. To
+reproduce 2.5.0 results, install that version:
+`remotes::install_github("PM-Cardoso/cateval@24c54ba")`.
+
+## Pairwise calibration: one regression across the calibration groups
+
+* `pairwise_calibration()` and `pairwise_calibration_pair()` now fit one
+  regression per value of `cal_groups`, with an intercept and a drug effect for
+  each group and adjustment coefficients shared by every group:
+  `outcome ~ 0 + group + group:drug + adjustment_var`. Before, each group had
+  its own regression, with its own adjustment coefficients. The adjustment
+  variables only correct for differences in prognosis between the two drugs,
+  so their coefficients are now estimated from all the patients of the pair,
+  and every group is adjusted for the same variables. In simulations this gave
+  the same or lower bias and 5% to 19% narrower intervals.
+* Estimates are unchanged without `adjustment_var`, and with one calibration
+  group. With adjustment variables and several groups they change.
+* The output has the same columns as before.
+
+## Robust confidence intervals (HC3)
+
+* The analytical intervals of `pairwise_calibration()`,
+  `pairwise_calibration_pair()` and `benefit_citl_slope()` now use HC3
+  heteroscedasticity-consistent standard errors, which allow the spread of the
+  outcome to differ between patients and groups. The point estimates of
+  `benefit_citl_slope()` are unchanged. `benefit_overall()`,
+  `benefit_by_group()` and `benefit_by_drug()` already used each group's own
+  standard deviation and are unchanged.
+* In the pairwise calibration, a group with fewer than 2 patients on one of the
+  drugs gets `NA` interval bounds and a warning (before: a group whose own
+  regression had no residual degrees of freedom). This now applies to the
+  bootstrap intervals too.
+
+## New argument `spline_df`
+
+* `pairwise_calibration()` and `pairwise_calibration_pair()` gain `spline_df`,
+  to let continuous adjustment variables enter the regression as natural cubic
+  splines instead of straight lines. `NULL` (default) keeps straight lines; one
+  number (e.g. `3`) applies to every numeric adjustment variable with at least
+  10 distinct values; a named vector (e.g. `c(baseline = 3)`) applies to the
+  named variables only. It is the last argument, so calls that give arguments
+  by position are unaffected.
+
+## Dependencies
+
+* `splines` (part of R) is now imported. `sandwich` is suggested, for the
+  tests only.
+
 # cateval 2.5.0
 
 ## Example data and a worked example

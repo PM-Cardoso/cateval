@@ -302,9 +302,11 @@ the pair (A, B):
 - the **predicted difference** is `pred_A - pred_B`. Negative values mean the
   model expects A to do better;
 - patients are split into groups by that predicted difference;
-- in each group, a regression of outcome on treatment (adjusted for the
-  variables in `adjustment_var`) estimates the **observed difference**, A
-  minus B.
+- one regression of outcome on treatment, across all groups, estimates the
+  **observed difference** in each group, A minus B. It is adjusted for the
+  variables in `adjustment_var`, with one coefficient per variable shared by
+  every group: these only correct for differences between the patients on A
+  and on B, so they use all the patients of the pair.
 
 ```{r pairwise}
 pairwise <- pairwise_calibration(
@@ -357,8 +359,10 @@ predicted to do better on the second, always across the two treatments. Add
 ## 4. Options worth knowing
 
 **Bootstrap intervals.** Every summary gives analytical intervals by default.
-Set `bootstrap = TRUE` for percentile bootstrap intervals that resample the
-matched pairs:
+The two regressions, `benefit_citl_slope()` and `pairwise_calibration()`, use
+HC3 robust standard errors, which allow the spread of the outcome to differ
+between patients. Set `bootstrap = TRUE` for percentile bootstrap intervals
+that resample the matched pairs:
 
 ```{r bootstrap}
 benefit_overall(matched$combined, bootstrap = TRUE, n_boot = 500, boot_seed = 1)
@@ -381,6 +385,31 @@ match_benefit_pairs(
   seed            = 1
 )
 ```
+
+**Curved adjustment variables.** In `pairwise_calibration()`, each adjustment
+variable enters as a straight line. If a variable's effect on the outcome
+bends, give it a curve (a natural spline) with `spline_df`, here with 3
+degrees of freedom:
+
+```{r splines}
+curved <- pairwise_calibration(
+  cateval_example,
+  drug_var        = "treatment",
+  drugs           = c("A", "B", "C"),
+  prediction_vars = c("pred_A", "pred_B", "pred_C"),
+  outcome_var     = "outcome",
+  cal_groups      = 5,
+  adjustment_var  = c("age", "sex", "baseline", "marker"),
+  spline_df       = c(baseline = 3)   # only baseline as a curve
+)
+
+# largest change in an observed difference
+max(abs(curved$coef - pairwise$coef))
+```
+
+The simulation gave every variable a straight-line effect, so the curve
+changes little against intervals of about ±1. `spline_df = 3` makes every
+continuous adjustment variable a curve.
 
 **Read the intervals with care.** With replacement (the default), one control
 patient can appear in several pairs. Neither interval accounts for that, so

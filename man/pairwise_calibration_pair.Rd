@@ -28,7 +28,8 @@ pairwise_calibration_pair(
   bootstrap = FALSE,
   n_boot = 1000,
   boot_seed = NULL,
-  conf = 0.95
+  conf = 0.95,
+  spline_df = NULL
 )
 }
 \arguments{
@@ -46,7 +47,10 @@ pairwise_calibration_pair(
 
 \item{matching}{Logical. Whether to perform covariate matching using the \code{MatchIt} package before estimating treatment effects.}
 
-\item{adjustment_var}{Optional character vector. Names of covariates to include as adjustment variables in the regression model. Must not include \code{drug_var} or \code{outcome_var}.}
+\item{adjustment_var}{Optional character vector. Names of covariates to
+adjust for in the regression. Each has one coefficient, shared by every
+calibration group (see Details). Must not include \code{drug_var} or
+\code{outcome_var}.}
 
 \item{matching_var}{Optional character vector. Covariates to use for matching. Defaults to \code{adjustment_var} if not specified. Must not include \code{drug_var} or \code{outcome_var}. Patients with a missing value in any \code{matching_var}, \code{match.exact} or \code{match.antiexact} variable are excluded before matching.}
 
@@ -90,8 +94,8 @@ contains the matched cohort and the \code{matchit} object, so the matching
 can be inspected (for example with a balance plot). Default \code{FALSE}.}
 
 \item{bootstrap}{Logical. If \code{FALSE} (default), confidence intervals are
-the model's Wald intervals. If \code{TRUE}, they are percentile bootstrap
-intervals (see Details).}
+Wald intervals with HC3 robust standard errors. If \code{TRUE}, they are
+percentile bootstrap intervals (see Details).}
 
 \item{n_boot}{Integer. Number of bootstrap replicates (used when
 \code{bootstrap = TRUE}).}
@@ -100,13 +104,26 @@ intervals (see Details).}
 reproducibility.}
 
 \item{conf}{Numeric. Confidence level for the intervals (default 0.95).}
+
+\item{spline_df}{Optional. Lets continuous adjustment variables enter the
+regression as a curve (a natural cubic spline) instead of a straight line.
+\itemize{
+\item \code{NULL} (default): every adjustment variable is a straight line.
+\item One number, e.g. \code{3}: every numeric adjustment variable with
+at least 10 distinct values becomes a curve with that many degrees of
+freedom. The others stay straight lines.
+\item A named vector, e.g. \code{c(baseline = 3)}: only the named
+variables become curves, each with its own degrees of freedom.
+}
+Degrees of freedom set how flexible the curve is: 1 is a straight line, 3
+lets it bend twice. See Details.}
 }
 \value{
 By default, a data frame where each row corresponds to a calibration group within each \code{cal_groups} setting. Columns include:
 
 \describe{
 \item{mean}{The mean predicted benefit score for patients in the calibration group.}
-\item{coef}{Estimated average treatment effect (regression coefficient) comparing the two drugs, adjusted if covariates are specified. \code{NA} when the group does not contain patients on both drugs.}
+\item{coef}{Estimated average treatment effect in the group (regression coefficient) comparing the two drugs, adjusted if covariates are specified. \code{NA} when the group does not contain patients on both drugs.}
 \item{coef_low}{Lower bound of the confidence interval for the treatment effect. \code{NA} when the effect, or its interval, cannot be estimated (see Details).}
 \item{coef_high}{Upper bound of the confidence interval for the treatment effect.}
 \item{n_groups}{Number of calibration groups (i.e., the value of cal_groups) used to create this stratification.}
@@ -124,10 +141,11 @@ frame above), \code{matched} (the matched cohort) and \code{matchit} (the
 \description{
 Estimates the treatment effect between two drugs within groups of predicted
 benefit. Patients are ordered by their predicted benefit, split into equal-sized
-calibration groups, and the observed treatment effect is estimated within each
-group. Comparing that observed effect with the predicted benefit is what shows
-whether the model is well calibrated. Covariate matching can optionally be
-applied before the effects are estimated.
+calibration groups, and the observed treatment effect in each group is
+estimated from one regression across all groups. Comparing that observed
+effect with the predicted benefit is what shows whether the model is well
+calibrated. Covariate matching can optionally be applied before the effects
+are estimated.
 }
 \details{
 The predicted benefit is expected on the scale \code{drugs[1]} minus
@@ -140,6 +158,36 @@ If several values are supplied to \code{cal_groups}, the process is repeated for
 each value and the results are combined. Matching, when requested, is carried
 out once and the same matched cohort is reused for every value of
 \code{cal_groups}, so the different groupings are directly comparable.
+
+\strong{The regression.} For each value of \code{cal_groups}, one linear
+regression is fitted to all the patients of the two drugs:
+\deqn{Y_i = \mu_{g(i)} + \theta_{g(i)} T_i + \beta^\top z_i + \varepsilon_i}
+with an intercept \eqn{\mu_g} and a drug effect \eqn{\theta_g} for each
+group \eqn{g}, \eqn{T_i = 1} for \code{drugs[1]}, and the adjustment
+variables \eqn{z_i}. \eqn{\theta_g} is \code{coef}. Every group shares the
+adjustment coefficients \eqn{\beta}: they only remove differences in
+prognosis between the two drugs, so they are estimated from all the patients
+of the pair, and every group is adjusted for the same variables. The group
+intercepts take up the differences in outcome level between groups. Without
+adjustment variables, or with one group, the estimates equal those of a
+separate regression in each group. Categorical adjustment variables enter as
+indicators (unused levels dropped); one with a single level among the
+patients used adds nothing and is left out. Patients with a missing outcome
+or adjustment variable are left out of the regression, but still count in
+\code{mean}, \code{n_drug1} and \code{n_drug2}.
+
+\strong{Splines.} One coefficient per variable assumes a straight-line
+effect. When a variable that drives the predicted benefit has a curved
+effect on the outcome, the groups at the ends of the range can be biased;
+\code{spline_df} lets such variables enter as natural cubic splines
+(\code{splines::ns}). The spline knots are set once, at quantiles of the
+pair's patients (after matching, if any), and kept for every value of
+\code{cal_groups} and every bootstrap replicate.
+
+\strong{Confidence intervals.} The analytical intervals use HC3 robust
+standard errors, which allow the spread of the outcome to differ between
+patients and groups, and widen the intervals of groups with few patients on
+a drug.
 
 \strong{Matching.} When \code{matching = TRUE}, patients predicted to do
 better on \code{drugs[1]} (\code{benefit_var <= 0}) form the treated group
@@ -156,15 +204,16 @@ matches can be formed (for example, every patient predicted to do better on
 one drug received the same drug as every patient predicted to do better on
 the other), \code{NULL} is returned with a warning.
 
-\strong{Groups too small for an interval.} A group's Wald interval needs at
-least one residual degree of freedom in the outcome model (more patients than
-model coefficients). When that is not met the point estimate is still
-returned but \code{coef_low} and \code{coef_high} are \code{NA}, with a
-warning naming the group.
+\strong{Groups too small for an interval.} A group needs at least two
+patients on each drug for an interval (with one, that patient fits exactly
+and its group's variance cannot be estimated). When that is not met the
+point estimate is still returned but \code{coef_low} and \code{coef_high}
+are \code{NA}, with a warning naming the group. The same happens to every
+group when the regression has no residual degrees of freedom.
 
 \strong{Bootstrap intervals.} The calibration groups are fixed from the
-original cohort before bootstrapping, so each replicate re-estimates the
-treatment effect for the \emph{same} groups rather than shifting the group
+original cohort before bootstrapping, so each replicate refits the
+regression for the \emph{same} groups rather than shifting the group
 boundaries between replicates. When matching has been applied the resampling
 unit is the matched set, which keeps matched patients together; otherwise
 patients are resampled individually. The matching itself is not repeated
@@ -179,7 +228,10 @@ patient can appear in several matched sets, so the matched observations are
 not independent. Neither the Wald nor the bootstrap interval widens to reflect
 this, so both should be read as approximate and the limitation stated when
 they are reported. Setting \code{replace = FALSE} removes the dependence, at
-the cost of fewer and generally poorer-quality matches.
+the cost of fewer and generally poorer-quality matches. The two patients of
+a matched set usually fall in different calibration groups (they are
+predicted to do better on different drugs), so the matching does not balance
+the two drugs within a group; the adjustment variables do that.
 }
 \examples{
 # predicted difference A minus B (negative = A predicted better)
@@ -208,6 +260,18 @@ pairwise_calibration_pair(
   matching_var = c("age", "sex", "baseline", "marker"),
   caliper      = c(baseline = 0.25),
   seed         = 1
+)
+
+# baseline as a curve (natural spline, 3 degrees of freedom)
+pairwise_calibration_pair(
+  ab,
+  drug_var       = "treatment",
+  drugs          = c("A", "B"),
+  benefit_var    = "benefit",
+  outcome_var    = "outcome",
+  cal_groups     = 5,
+  adjustment_var = c("age", "sex", "baseline", "marker"),
+  spline_df      = c(baseline = 3)
 )
 
 }

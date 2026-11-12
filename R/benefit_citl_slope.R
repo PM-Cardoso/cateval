@@ -8,12 +8,12 @@
 #'
 #' @param pairs A matched-pairs data frame from \code{\link{match_benefit_pairs}}
 #'   containing \code{pred.benefit} and \code{obs.benefit}.
-#' @param bootstrap Logical. If \code{FALSE} (default) the intervals are the
-#'   analytical regression confidence intervals. If \code{TRUE} they are
-#'   percentile bootstrap intervals that resample the matched pairs independently
-#'   (one row = one pair). These relax the regression's homoscedastic-error
-#'   assumption, but do not by themselves account for the dependence from reusing
-#'   a control patient across pairs (matching with replacement).
+#' @param bootstrap Logical. If \code{FALSE} (default) the intervals are
+#'   analytical, with HC3 robust standard errors: they allow the spread of the
+#'   observed benefit to change with the predicted benefit. If \code{TRUE} they
+#'   are percentile bootstrap intervals that resample the matched pairs
+#'   independently (one row = one pair). Neither accounts for the dependence
+#'   from reusing a control patient across pairs (matching with replacement).
 #' @param n_boot Integer. Number of bootstrap replicates.
 #' @param boot_seed Optional integer. Seed for reproducibility.
 #' @param conf Numeric. Confidence level (default 0.95).
@@ -42,7 +42,7 @@
 #' # bootstrap intervals
 #' benefit_citl_slope(matched$combined, bootstrap = TRUE, n_boot = 200, boot_seed = 1)
 #'
-#' @importFrom stats lm coef confint
+#' @importFrom stats lm coef qt model.matrix
 #' @importFrom boot boot
 #' @export
 benefit_citl_slope <- function(pairs,
@@ -74,9 +74,11 @@ benefit_citl_slope <- function(pairs,
     lower <- c(ci_int[1], ci_slope[1])
     upper <- c(ci_int[2], ci_slope[2])
   } else {
-    ci <- stats::confint(fit, level = conf)
-    lower <- ci[, 1]
-    upper <- ci[, 2]
+    # Wald intervals with HC3 robust standard errors and t quantiles
+    se <- sqrt(diag(.vcov_hc3(stats::model.matrix(fit), fit)))
+    t_crit <- stats::qt(1 - (1 - conf) / 2, fit$df.residual)
+    lower <- estimate - t_crit * se
+    upper <- estimate + t_crit * se
   }
 
   data.frame(
